@@ -18,6 +18,7 @@ import {
   setQuand,
 } from '../lib/filter.js'
 import { ouvrirFiltres } from './filtres.js'
+import './enteteAgenda.css'
 import { dayKey, eventDayKeys, isRecurring, recurrenceDaysLabel } from '../lib/recurrence.js'
 import {
   CODES_DEPARTEMENTS,
@@ -66,6 +67,8 @@ export async function viewCalendar() {
   logo.alt = 'Armana'
   logo.addEventListener('error', () => logo.remove())
   head.appendChild(title)
+  // La devise du sticker, sous le nom (en-tête « Signature », enteteAgenda.css).
+  head.appendChild(el('p', 'entete-devise', 'L’agenda culturel partagé'))
 
   const calendarToggle = el('button', 'studio-calendar-toggle')
   calendarToggle.type = 'button'

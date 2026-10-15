@@ -1,0 +1,57 @@
+/* Armana — en-tête de l'Agenda, version « Signature » (choisie par Matthieu le
+   15/10/2026 parmi quatre propositions : Signature, Onglets, Pictos, Panneau).
+   Le nom, sa devise en petites capitales jaunes, des puces de style au simple
+   contour, et les filtres rapides réunis dans une barre translucide.
+
+   ⚠ Sélecteurs volontairement longs (écran + rangée) : ils doivent battre
+   `.chips-row--studio.chips-row--rapides .chip` de style.css — le piège de
+   spécificité rencontré quatre fois sur ce projet. */
+
+.screen--studio-calendar .screen-head--studio { row-gap: 0; }
+
+/* La devise, celle du sticker, sous le nom. */
+.entete-devise {
+  grid-column: 1;
+  grid-row: 2;
+  margin: -0.15rem 0 0;
+  color: var(--mask-yellow);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Styles : contour blanc, fond transparent ; choisi = jaune plein. */
+.screen--studio-calendar .chips-row--cats .chip {
+  color: #fff;
+  background: transparent;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+}
+.screen--studio-calendar .chips-row--cats .chip.is-active {
+  color: var(--studio-ink);
+  background: var(--mask-yellow);
+  border-color: var(--mask-yellow);
+  box-shadow: none;
+}
+
+/* Filtres rapides : une barre unique, translucide, comme un sélecteur.
+   Vérifié sur 360 px : la rangée tient sur une ligne. */
+.screen--studio-calendar .chips-row--studio.chips-row--rapides {
+  gap: 0.2rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.screen--studio-calendar .chips-row--studio.chips-row--rapides .chip {
+  flex: 1 1 auto;
+  justify-content: center;
+  color: #fff;
+  background: transparent;
+  border-color: transparent;
+}
+.screen--studio-calendar .chips-row--studio.chips-row--rapides .chip.is-active {
+  color: var(--studio-ink);
+  background: #fff;
+  box-shadow: none;
+}
