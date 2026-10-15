@@ -2544,6 +2544,9 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
   --poster-tone: var(--studio-yellow);
   --poster-ink: var(--studio-ink);
   --poster-category: var(--studio-red);
+  /* Décalage horizontal des deux bords obliques qui encadrent la photo, sur
+     toute la hauteur : un seul chiffre pour les deux, donc le même angle. */
+  --poster-oblique: 16px;
   position: relative;
   isolation: isolate;
   display: grid;
@@ -2592,7 +2595,10 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
   overflow: hidden;
   color: var(--poster-ink);
   background: var(--poster-tone);
-  clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%);
+  /* ⚠ OBLIQUE EN PIXELS, et la même que le bord droit de la photo (voir
+     .poster-card__media) : les deux bords sont PARALLÈLES. En pourcentages,
+     chacun suivait la largeur de sa colonne et ils n'avaient pas le même angle. */
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--poster-oblique)) 100%, 0 100%);
 }
 .poster-card__date::after {
   content: '';
@@ -2746,14 +2752,19 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
 .poster-card__media {
   position: relative;
   z-index: 1;
-  width: calc(100% + 32px);
+  /* ⚠ PLUS DE DÉBORDEMENT SUR LA COLONNE DE DROITE. La photo dépassait de
+     14 px sous le panneau crème, qui la recouvrait : son bord droit était donc
+     vertical en haut puis oblique en bas — la « cassure » que Matthieu voyait
+     depuis la maquette d'origine. Elle s'arrête maintenant au bord du panneau,
+     et l'oblique est découpée dans la photo elle-même. */
+  width: calc(100% + 18px);
   height: 100%;
   min-width: 0;
   min-height: 0;
   margin-left: -18px;
   overflow: hidden;
   background: var(--studio-blue);
-  clip-path: polygon(7% 0, 100% 0, 86% 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--poster-oblique)) 100%, 0 100%);
 }
 .poster-card__media img {
   display: block;
