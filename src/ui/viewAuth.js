@@ -2,7 +2,7 @@
 import { el } from './components.js'
 import { navigate } from '../lib/router.js'
 import { studioHeader } from './studio.js'
-import { signIn, signUp, resetPassword, isLoggedIn } from '../lib/auth.js'
+import { signIn, signUp, resetPassword, isLoggedIn, TYPES_COMPTE } from '../lib/auth.js'
 
 export function viewAuth() {
   // Le nom du projet est dans la barre de titre, et c'est le LOGO qui accueille
@@ -34,6 +34,38 @@ export function viewAuth() {
   const msg = el('p', 'form__msg')
 
   const nameField = field('Nom affiché', 'text', 'name', 'Comment on vous verra')
+
+  // --- « Vous êtes… » (migration 0033), à l'inscription seulement ---------
+  // Trois pastilles qui s'excluent. ⚠ Le choix ne donne AUCUN droit : il ouvre
+  // seulement, ensuite, la possibilité de créer une fiche (lieu, food truck),
+  // qu'un modérateur validera. Il se change à tout moment dans « Mon profil ».
+  let typeCompte = 'particulier'
+  const typeWrap = el('div', 'form__field')
+  typeWrap.appendChild(el('span', 'form__label', 'Vous êtes…'))
+  const typeRow = el('div', 'choix')
+  const typeBtns = TYPES_COMPTE.map((t) => {
+    const b = el('button', 'choix__option', t.texte)
+    b.type = 'button'
+    b.addEventListener('click', () => {
+      typeCompte = t.cle
+      peindreType()
+    })
+    typeRow.appendChild(b)
+    return b
+  })
+  typeWrap.appendChild(typeRow)
+  const typeAide = el('span', 'form__hint')
+  typeWrap.appendChild(typeAide)
+  const AIDES = {
+    particulier: 'Pour suivre l’agenda, garder vos favoris et publier des événements.',
+    lieu: 'Vous gérez une salle, un café-concert, une galerie… Vous pourrez créer la fiche de votre lieu : photo, horaires, site.',
+    food_truck: 'Vous pourrez créer la fiche de votre camion : cuisine, menu, photo — puis indiquer où vous trouver.',
+  }
+  function peindreType() {
+    TYPES_COMPTE.forEach((t, i) => typeBtns[i].classList.toggle('is-active', t.cle === typeCompte))
+    typeAide.textContent = AIDES[typeCompte]
+  }
+  peindreType()
   const emailField = field('E-mail', 'email', 'email', 'vous@exemple.fr')
   const passField = field('Mot de passe', 'password', 'password', '••••••••')
 
@@ -50,6 +82,7 @@ export function viewAuth() {
     toggle.textContent =
       mode === 'login' ? 'Pas encore de compte ? S’inscrire' : 'Déjà inscrit ? Se connecter'
     nameField.wrap.style.display = mode === 'signup' ? '' : 'none'
+    typeWrap.style.display = mode === 'signup' ? '' : 'none'
     forgot.style.display = mode === 'login' ? '' : 'none'
     msg.textContent = ''
     msg.className = 'form__msg'
@@ -94,12 +127,17 @@ export function viewAuth() {
       if (mode === 'signup') {
         const name = nameField.input.value.trim()
         if (!name) throw new Error('Le nom affiché est requis.')
-        const res = await signUp(email, password, name)
+        const res = await signUp(email, password, name, typeCompte)
         if (!res.session) {
-          msg.className = 'form__msg form__msg--ok'
-          msg.textContent = 'Compte créé. Vérifiez votre e-mail pour confirmer, puis connectez-vous.'
           mode = 'login'
           paint()
+          msg.className = 'form__msg form__msg--ok'
+          msg.textContent = 'Compte créé. Vérifiez votre e-mail pour confirmer, puis connectez-vous.'
+          return
+        }
+        // Lieu ou food truck : on enchaîne directement sur la fiche.
+        if (typeCompte !== 'particulier') {
+          navigate('/ma-fiche')
           return
         }
       } else {
@@ -115,6 +153,7 @@ export function viewAuth() {
   })
 
   form.appendChild(nameField.wrap)
+  form.appendChild(typeWrap)
   form.appendChild(emailField.wrap)
   form.appendChild(passField.wrap)
   form.appendChild(submit)

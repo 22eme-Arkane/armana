@@ -15,6 +15,7 @@
 // mentirait sur ce qui est réellement filtré.
 
 import { getMesDepartements } from './mesDepartements.js'
+import { dayKey } from './recurrence.js'
 
 /** Styles retenus. Ensemble VIDE = tous les styles, jamais « aucun ». */
 let styles = new Set()
@@ -24,6 +25,8 @@ let styles = new Set()
 let tarifs = new Set()
 /** Fenêtre de dates : 'today' | 'weekend' | null (toutes). */
 let quand = null
+/** Un jour précis (AAAA-MM-JJ), choisi dans le panneau. Exclusif de `quand`. */
+let jourPrecis = null
 
 /**
  * Retouche TEMPORAIRE des départements. `null` = on suit le choix durable
@@ -95,9 +98,71 @@ export function getQuand() {
   return quand
 }
 
+/**
+ * Les jours couverts par la fenêtre « Quand », ou null (tous les jours).
+ * Partagé par l'Agenda et la Carte : calculé à deux endroits, le week-end
+ * finirait par ne pas tomber les mêmes jours.
+ * @returns {Set<string>|null}
+ */
+export function joursDeQuand() {
+  if (jourPrecis) return new Set([jourPrecis])
+  if (quand === 'today') return new Set([dayKey(new Date())])
+  if (quand === 'weekend') {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    // ⚠ LE DIMANCHE, ON EST DÉJÀ DANS LE WEEK-END. Chercher le PROCHAIN samedi
+    // (`(6 - getDay() + 7) % 7` vaut 6 le dimanche) renvoyait au week-end
+    // suivant et faisait disparaître la journée en cours. Le samedi étant
+    // passé, on ne garde que le jour même — « jusqu'au dimanche soir ».
+    if (start.getDay() === 0) return new Set([dayKey(start)])
+    const samedi = new Date(start)
+    samedi.setDate(start.getDate() + ((6 - start.getDay() + 7) % 7))
+    const dimanche = new Date(samedi)
+    dimanche.setDate(samedi.getDate() + 1)
+    return new Set([dayKey(samedi), dayKey(dimanche)])
+  }
+  if (quand === 'semaine') {
+    // D'aujourd'hui à dimanche soir : la semaine qui RESTE, pas les jours
+    // déjà passés.
+    const now = new Date()
+    const jour = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const out = new Set()
+    do {
+      out.add(dayKey(jour))
+      jour.setDate(jour.getDate() + 1)
+    } while (jour.getDay() !== 1) // jusqu'au dimanche inclus
+    return out
+  }
+  return null
+}
+
+/** Libellé court de la période retenue, pour une pastille ou un compteur. */
+export function libelleQuand() {
+  if (jourPrecis) {
+    return new Date(jourPrecis + 'T12:00:00').toLocaleDateString('fr-FR', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    })
+  }
+  return { today: 'Aujourd’hui', weekend: 'Ce week-end', semaine: 'Cette semaine' }[quand] ?? null
+}
+
 /** Re-choisir la même fenêtre la relâche : même geste que sur les styles. */
 export function setQuand(valeur) {
   quand = quand === valeur ? null : valeur || null
+  if (quand) jourPrecis = null
+  notifier()
+}
+
+export function getJourPrecis() {
+  return jourPrecis
+}
+
+/** Un jour précis remplace « Aujourd'hui » / « Ce week-end » (et inversement). */
+export function setJourPrecis(ymd) {
+  jourPrecis = ymd || null
+  if (jourPrecis) quand = null
   notifier()
 }
 
@@ -138,13 +203,14 @@ function memeListe(a, b) {
 
 /** Nombre de filtres actifs, pour la pastille du bouton « Filtres ». */
 export function nbFiltresActifs() {
-  return styles.size + tarifs.size + (quand ? 1 : 0) + (deptsTemporaires ? 1 : 0)
+  return styles.size + tarifs.size + (quand || jourPrecis ? 1 : 0) + (deptsTemporaires ? 1 : 0)
 }
 
 export function resetFiltres() {
   styles = new Set()
   tarifs = new Set()
   quand = null
+  jourPrecis = null
   // La retouche disparaît : on revient au choix durable de Profil, pas à
   // « tous les départements ».
   deptsTemporaires = null

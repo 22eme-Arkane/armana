@@ -103,7 +103,8 @@ export function posterEventCard(ev, opts = {}) {
   // « Tous les lundis, mardis… » écrasait le titre et l'adresse pour une
   // information qu'on ne lit pas en parcourant une liste. Trois choses
   // suffisent ici : le style, le nom, le lieu. Le détail est sur la fiche.
-  if (ev.address) {
+  const ville = ev.ville || (ev.address ? villeDeLAdresse(ev.address) : '')
+  if (ville) {
     // ⚠ LA VILLE SEULE, PAS L'ADRESSE COMPLÈTE. « Chapelle St François,
     // Couvent des Cordeliers, 04300 Forcalquier » tenait sur trois lignes et
     // repoussait tout le reste, alors qu'en parcourant l'agenda on ne cherche
@@ -113,11 +114,26 @@ export function posterEventCard(ev, opts = {}) {
     // Le même marqueur que la carte et la fiche, en tout petit : il signale
     // « c'est ici que ça se passe » sans qu'on ait à lire.
     lieu.appendChild(marqueurArmana({ size: 12 }))
-    lieu.appendChild(document.createTextNode(' ' + villeDeLAdresse(ev.address)))
+    // ⚠ TOUJOURS LA COMMUNE, et la même partout (Matthieu, 15/10/2026) : on
+    // lisait tantôt « 04300 », tantôt « Mane », tantôt « Théâtre La
+    // Rirette ». `ev.ville` vient de la commune choisie (migration 0035) ou,
+    // pour les anciens événements, de la liste officielle (lib/communes.js).
+    lieu.appendChild(document.createTextNode(' ' + ville))
     info.appendChild(lieu)
   }
   // Forme COURTE : le badge ne dépasse pas quinze signes (voir formatPriceCourt).
   info.appendChild(el('span', 'poster-card__price', formatPriceCourt(ev)))
+  // « Food sur place » (migration 0034) : un food truck a annoncé sa venue.
+  // En pastille seule — la carte n'a pas la place d'un mot de plus à côté du
+  // tarif ; la fiche, elle, l'écrit en toutes lettres.
+  if (ev.food_trucks?.length || ev.restauration) {
+    const food = el('span', 'poster-card__food')
+    food.title = 'Food sur place'
+    food.setAttribute('aria-label', 'Food sur place')
+    food.appendChild(icon('truck'))
+    info.appendChild(food)
+    info.classList.add('poster-card__info--food')
+  }
   card.appendChild(info)
 
   if (opts.showGem !== false) {

@@ -13,6 +13,7 @@ import {
   getQuand,
   getStyles,
   getTarifs,
+  joursDeQuand,
   nbFiltresActifs,
   onFilterChange,
   setQuand,
@@ -241,27 +242,8 @@ export async function viewCalendar() {
   }
 
   /** Filtres portant sur le JOUR — appliqués aux occurrences, pas aux événements. */
-  function joursDuFiltreRapide() {
-    const q = getQuand()
-    if (q === 'today') return new Set([dayKey(new Date())])
-    if (q === 'weekend') {
-      const now = new Date()
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      // ⚠ LE DIMANCHE, ON EST DÉJÀ DANS LE WEEK-END. L'ancien calcul cherchait
-      // le PROCHAIN samedi : `(6 - getDay() + 7) % 7` vaut 6 le dimanche, ce
-      // qui renvoyait au week-end SUIVANT et faisait disparaître la journée en
-      // cours. Vérifié sur les sept jours : le défaut ne touchait que celui-là,
-      // le samedi était juste. Le samedi étant passé, on ne garde que le jour
-      // même — « jusqu'au dimanche soir ».
-      if (start.getDay() === 0) return new Set([dayKey(start)])
-      const samedi = new Date(start)
-      samedi.setDate(start.getDate() + ((6 - start.getDay() + 7) % 7))
-      const dimanche = new Date(samedi)
-      dimanche.setDate(samedi.getDate() + 1)
-      return new Set([dayKey(samedi), dayKey(dimanche)])
-    }
-    return null
-  }
+  // Calcul partagé avec la Carte (lib/filter.js), dimanche compris.
+  const joursDuFiltreRapide = joursDeQuand
 
   /**
    * UNE CARTE PAR JOUR COUVERT. Un festival du 7 au 9 août apparaît trois fois
@@ -533,12 +515,8 @@ export async function viewCalendar() {
   repaintCalendar()
   repaintList()
 
-  // --- Bouton flottant : publier ---
-  const fab = el('button', 'fab')
-  fab.title = 'Publier un événement'
-  fab.appendChild(icon('plus'))
-  fab.addEventListener('click', () => navigate(isLoggedIn() ? '/publier' : '/connexion'))
-  wrap.appendChild(fab)
+  // Le bouton « Publier » flottant a rejoint la barre d'onglets (version C,
+  // 15/10/2026) : il est désormais au centre, sur tous les écrans.
 
   return wrap
 }

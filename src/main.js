@@ -21,6 +21,9 @@ import { viewAdmins } from './ui/viewAdmins.js'
 import { viewNewPassword } from './ui/viewNewPassword.js'
 import { viewContact } from './ui/viewContact.js'
 import { viewProfilEdit } from './ui/viewProfilEdit.js'
+import { viewFicheEdit } from './ui/viewFicheEdit.js'
+import { viewFiche } from './ui/viewFiche.js'
+import { viewPlanning } from './ui/viewPlanning.js'
 import { viewMembers } from './ui/viewMembers.js'
 import { viewStats } from './ui/viewStats.js'
 import { viewFeedback } from './ui/viewFeedback.js'
@@ -123,6 +126,9 @@ defineRoutes(
     '/nouveau-mdp': viewNewPassword,
     '/contact': viewContact,
     '/mon-profil': viewProfilEdit,
+    '/ma-fiche': viewFicheEdit,
+    '/fiche': viewFiche,
+    '/mon-planning': viewPlanning,
     '/membres': viewMembers,
     '/statistiques': viewStats,
     '/messages': viewFeedback,

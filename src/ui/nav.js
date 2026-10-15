@@ -2,7 +2,7 @@
 import { el } from './components.js'
 import { icon } from './icons.js'
 import { navigate, currentRoute } from '../lib/router.js'
-import { isAdmin } from '../lib/auth.js'
+import { isAdmin, isLoggedIn } from '../lib/auth.js'
 import { myPendingCount } from '../lib/moderation.js'
 
 /**
@@ -90,6 +90,24 @@ const PARENT = {
   '/mes-departements': '/parametres',
   '/devenir-moderateur': '/parametres',
   '/candidatures': '/parametres',
+  '/mon-profil': '/parametres',
+  '/ma-fiche': '/parametres',
+  '/mon-planning': '/parametres',
+  '/fiche': '/',
+}
+
+/** Le « + » central : publier un événement (ou se connecter d'abord). */
+function boutonPublier(path) {
+  const b = el('button', 'navtab-publier')
+  b.type = 'button'
+  b.title = 'Publier un événement'
+  b.setAttribute('aria-label', 'Publier un événement')
+  const carre = el('span', 'navtab-publier__carre')
+  carre.appendChild(icon('plus'))
+  b.appendChild(carre)
+  if (path === '/publier') b.classList.add('is-active')
+  b.addEventListener('click', () => navigate(isLoggedIn() ? '/publier' : '/connexion'))
+  return b
 }
 
 export function buildNav() {
@@ -99,15 +117,28 @@ export function buildNav() {
   const active = PARENT[path] ?? path
 
   const buttons = {}
-  for (const t of TABS) {
+  TABS.forEach((t, i) => {
+    // « Publier » au centre, entre Carte et Favoris (version C, 15/10/2026) :
+    // l'ancien bouton flottant n'existait que sur l'Agenda et masquait la
+    // dernière carte de la liste. Ici il est sur tous les écrans, et ne
+    // recouvre rien.
+    if (i === 2) inner.appendChild(boutonPublier(path))
     const b = el('button', 'navtab')
-    b.appendChild(icon(t.ic))
+    b.type = 'button'
+    // Le pictogramme est enveloppé : c'est l'enveloppe qui porte le carré
+    // bleu de l'onglet actif, sans rogner l'icône (voir style.css).
+    const pastille = el('span', 'navtab__icone')
+    pastille.appendChild(icon(t.ic))
+    b.appendChild(pastille)
     b.appendChild(el('span', 'navtab__label', t.label))
-    if (active === t.path) b.classList.add('is-active')
+    if (active === t.path) {
+      b.classList.add('is-active')
+      b.setAttribute('aria-current', 'page')
+    }
     b.addEventListener('click', () => navigate(t.path))
     inner.appendChild(b)
     buttons[t.path] = b
-  }
+  })
 
   // Pastille du modérateur sur « Profil » : les événements en attente DANS SA
   // ZONE — l'ancien compteur global aurait menti à un modérateur cloisonné à

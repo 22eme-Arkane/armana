@@ -529,6 +529,20 @@ a.settings-row .settings-row__label { word-break: break-all; }
   font-size: 0.95rem;
   color: var(--studio-ink);
 }
+/* Champ « date » invisible qui sert à ouvrir le calendrier natif (ui/calendrier.js).
+   ⚠ PAS display:none : un champ non rendu ne peut pas ouvrir son calendrier. */
+.calendrier-cache {
+  position: fixed;
+  left: 50%;
+  bottom: 50%;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  pointer-events: none;
+}
+.lieu-commune__label { display: block; margin-top: 0.8rem; }
 .feuille__aide {
   margin: 0 0 0.5rem;
   font-size: 0.76rem;
@@ -1227,6 +1241,24 @@ a.settings-row .settings-row__label { word-break: break-all; }
 .map-pill svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .map-pill__texte { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-pill.is-active { background: var(--mask-yellow); border-color: var(--mask-yellow); }
+/* « Food trucks », seul dans le coin haut droit de la carte (15/10/2026) ;
+   la barre de pastilles lui laisse la place. */
+.map-pills { right: 132px; }
+.map-pill.map-food {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 402;
+  max-width: 116px;
+}
+.popup__jours { margin: 0.2rem 0 0.5rem; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.5; }
+.popup__jours li.is-today { font-weight: 800; color: var(--studio-red); }
+/* Allumée, la pastille prend la couleur de ses marqueurs : le lien se fait seul. */
+.map-pill.map-pill--trucks.is-active {
+  background: var(--studio-red);
+  border-color: var(--studio-red);
+  color: #fff;
+}
 /* Posé sur le cadre de la carte, pas dans la barre de pastilles — celle-ci
    défile horizontalement et découperait le menu (voir viewMap.js). */
 .map-menu {
@@ -1402,6 +1434,16 @@ a.settings-row .settings-row__label { word-break: break-all; }
   display: block;
   filter: drop-shadow(0 3px 4px rgba(6, 43, 29, 0.35));
 }
+/* Marqueur de food truck : un rond, pas une goutte — voir viewMap.js. */
+.marqueur-food-truck { background: none; border: none; }
+.marqueur-food-truck svg {
+  width: 40px;
+  height: 40px;
+  display: block;
+  filter: drop-shadow(0 3px 4px rgba(6, 43, 29, 0.35));
+}
+.popup__cat.popup__cat--truck { background: var(--studio-red); color: #fff; }
+.popup__meta.popup__meta--horaires { white-space: pre-line; }
 .map-geo-msg:not(:empty) {
   padding: 0.45rem 0.6rem;
   border-radius: 10px;
@@ -2503,40 +2545,66 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
   border-color: #062b1d;
   box-shadow: 0 6px 18px rgba(6, 43, 29, 0.32);
 }
+/* Barre d'onglets « Soleil » (version C, choisie le 15/10/2026) : le jaune
+   d'Armana, coins hauts arrondis, sans trait ; l'onglet actif dans un carré
+   bleu, et le « + » de publication en carré bleu penché qui dépasse au centre. */
 .bottom-nav--studio {
-  background: var(--mask-yellow, #f4ca15);
-  border-top: 2px solid #064f36;
-  box-shadow: 0 -5px 20px rgba(6, 43, 29, 0.18);
-}
-/* Contraste : le vert sur jaune était à 2,2:1 (illisible, et actif/inactif
-   indiscernables). Encre sombre pleine opacité pour les deux états. */
-.bottom-nav--studio .navtab { color: #064f36; opacity: 1; }
-.bottom-nav--studio .navtab.is-active {
-  color: #043326;
-  font-weight: 800;
-}
-/* ⚠ La pastille blanche de l'onglet actif remonte de 7 px : sans la marge
-   haute ci-dessous, elle dépassait du bandeau et se retrouvait rognée sur le
-   dessus (« le logo Agenda est légèrement tronqué »). */
-.bottom-nav--studio { overflow: visible; }
-.bottom-nav--studio .bottom-nav__inner { padding-top: 7px; }
-/* ⚠ LE ROND EST PORTÉ PAR LE SVG LUI-MÊME, et un <svg> découpe son contenu
-   par défaut (overflow: hidden). Avec 5 px de marge, le rond faisait 35 px de
-   diamètre pour une icône dont la DIAGONALE atteint 35,4 px : les quatre
-   angles du calendrier étaient rognés. Deux corrections, l'une sans l'autre ne
-   suffit pas : on élargit le rond ET on rend le débordement visible. */
-.bottom-nav--studio .navtab.is-active svg {
-  box-sizing: content-box;
   overflow: visible;
-  margin-top: -7px;
-  padding: 7px;
-  border-radius: 50%;
-  background: #ffffff;
-  filter: drop-shadow(0 2px 0 rgba(6, 79, 54, 0.16));
+  background: var(--mask-yellow, #f4ca15);
+  border-top: none;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -6px 22px rgba(6, 43, 29, 0.16);
 }
-.bottom-nav--studio .navtab svg { width: 25px; height: 25px; }
-.bottom-nav--studio .navtab__label { font-size: 0.68rem; }
-.bottom-nav--studio .bottom-nav__inner { max-width: 480px; }
+.bottom-nav--studio .bottom-nav__inner { max-width: 480px; align-items: center; }
+/* Contraste : encre verte pleine opacité, jamais le vert clair sur jaune
+   (2,2:1, illisible — mesuré lors de la version précédente). */
+.bottom-nav--studio .navtab { color: #064f36; opacity: 1; gap: 2px; }
+.bottom-nav--studio .navtab__icone {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 32px;
+  border-radius: 11px;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+.bottom-nav--studio .navtab svg { width: 23px; height: 23px; }
+.bottom-nav--studio .navtab__label { font-size: 0.68rem; font-weight: 600; }
+.bottom-nav--studio .navtab.is-active { color: var(--studio-blue, #0b55c5); }
+.bottom-nav--studio .navtab.is-active .navtab__icone {
+  background: var(--studio-blue, #0b55c5);
+  color: #fff;
+}
+.bottom-nav--studio .navtab.is-active .navtab__label { font-weight: 800; }
+
+/* Le « + » central. ⚠ Le carré est penché, PAS le pictogramme : on le
+   redresse d'autant, sinon la croix paraîtrait de travers. */
+.navtab-publier {
+  flex: 0 0 64px;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.navtab-publier__carre {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-top: -22px;
+  border: 3px solid var(--mask-yellow, #f4ca15);
+  border-radius: 18px;
+  background: var(--studio-blue, #0b55c5);
+  color: var(--mask-yellow, #f4ca15);
+  box-shadow: 0 6px 14px rgba(6, 43, 29, 0.28);
+  transform: rotate(-8deg);
+  transition: transform 0.18s ease;
+}
+.navtab-publier__carre svg { width: 27px; height: 27px; stroke-width: 2.6; transform: rotate(8deg); }
+.navtab-publier:active .navtab-publier__carre { transform: rotate(-8deg) scale(0.94); }
+.navtab-publier.is-active .navtab-publier__carre { background: #064f36; }
 
 /* Carte éditoriale autonome de l’Agenda. Les dimensions sont calées sur
    l’artboard mobile de référence (390 px), sans dépendre de .ecard. */
@@ -2859,6 +2927,21 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+/* « Food sur place » : pastille rouge au camion, en bas à gauche, face au tarif. */
+.poster-card__food {
+  position: absolute;
+  left: 0.36rem;
+  bottom: 0.38rem;
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: var(--studio-red);
+  color: #fff;
+}
+.poster-card__food svg { width: 0.72rem; height: 0.72rem; }
+.poster-card__info--food .poster-card__price { max-width: calc(100% - 2.1rem); }
 .poster-card__price {
   position: absolute;
   right: 0.36rem;

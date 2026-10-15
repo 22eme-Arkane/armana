@@ -25,6 +25,8 @@ import { villeDeLAdresse } from '../lib/adresse.js'
 import { lireContact } from '../lib/contact.js'
 import { dayKey, describeRecurrence, isRecurring, nextOccurrence } from '../lib/recurrence.js'
 import './ficheEvenement.css'
+import './planning.css' // badge « Food sur place »
+import { formatPrix, lireMenu } from '../lib/menu.js'
 
 const JOUR_COURT = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
 const JOUR_LONG = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -172,7 +174,8 @@ function entete(ev, q, avecPhoto) {
   } else {
     cases.appendChild(kase('Quand', majuscule(q.court), q.heure + (q.heureFin ? ' → ' + q.heureFin : '')))
   }
-  if (ev.address) cases.appendChild(kase('Où', villeDeLAdresse(ev.address)))
+  const ville = ev.ville || (ev.address ? villeDeLAdresse(ev.address) : '')
+  if (ville) cases.appendChild(kase('Où', ville, ev.place_name || null))
   cases.appendChild(kase('Tarif', prix(ev)))
   carte.appendChild(cases)
   return carte
@@ -233,7 +236,10 @@ function infosPratiques(ev, q, reste) {
   liste.appendChild(info('calendar', 'Quand', q.long, prochaine))
   // L'adresse complète, sans bouton d'itinéraire : « Y aller », plus haut,
   // fait déjà ce travail (retiré à la demande de Matthieu).
-  if (ev.address) liste.appendChild(info('pin', 'Où', ev.address))
+  // Lieu et commune, séparés depuis la migration 0035 : « Théâtre La Rirette,
+  // Mane ». Les anciens événements gardent leur adresse telle quelle.
+  const ou = ev.city ? [ev.place_name, ev.city].filter(Boolean).join(', ') : ev.address
+  if (ou) liste.appendChild(info('pin', 'Où', ou))
   liste.appendChild(info('euro', 'Tarif', prix(ev)))
   // Ce qui reste du champ contact une fois les liens et numéros devenus des
   // boutons : le plus souvent, le nom de l'organisateur.
@@ -262,7 +268,7 @@ function toast(texte) {
 }
 
 async function partager(ev, q) {
-  const ville = ev.address ? villeDeLAdresse(ev.address) : ''
+  const ville = ev.ville || (ev.address ? villeDeLAdresse(ev.address) : '')
   const quandTexte =
     q.type === 'serie'
       ? `prochaine séance ${JOUR_LONG.format(q.ref)} à ${q.heure}`
@@ -386,10 +392,74 @@ export function ficheEvenement(ev, { gemmed = false } = {}) {
       ...autres.map((a) => actionContact(a, 'rond'))
     ),
     carte('À propos', blocDescription(ev.description)),
+    carte('Food sur place', blocFood(ev)),
     infosPratiques(ev, q, contact.reste),
-    el('p', 'fiche-auteur', 'Publié par ' + (ev.author_name || 'Anonyme'))
+    auteur(ev)
   )
   return f
+}
+
+/**
+ * « Publié par … ». Si l'auteur est un lieu ou un food truck dont la fiche est
+ * publiée, son nom devient un lien vers elle (migration 0033) : c'est ce qui
+ * donne une raison d'avoir une fiche complète.
+ */
+/**
+ * « Food sur place » : les food trucks annoncés (vers leur fiche), puis la
+ * restauration de l'organisateur — menu plat par plat et/ou sa photo
+ * (migrations 0034 et 0035).
+ */
+function blocFood(ev) {
+  const plats = ev.restauration ? lireMenu(ev.restauration_menu) : []
+  const photoMenu = ev.restauration ? ev.menu_photo_url : null
+  if (!ev.food_trucks?.length && !ev.restauration) return null
+  const bloc = el('div', 'fiche-menu-bloc')
+  if (ev.food_trucks?.length) {
+    const box = el('div', 'fiche-food')
+    for (const t of ev.food_trucks) {
+      const a = el('a', 'badge-food')
+      a.href = '#/fiche?id=' + encodeURIComponent(t.id)
+      a.append(icon('truck'), el('span', null, t.name))
+      box.appendChild(a)
+    }
+    bloc.appendChild(box)
+  }
+  if (plats.length) {
+    const ul = el('ul', 'fiche-menu')
+    for (const p of plats) {
+      const li = el('li', 'fiche-menu__ligne')
+      li.appendChild(el('span', 'fiche-menu__plat', p.plat))
+      if (p.prix != null) li.appendChild(el('span', 'fiche-menu__prix', formatPrix(p.prix)))
+      ul.appendChild(li)
+    }
+    bloc.appendChild(ul)
+  }
+  if (photoMenu) {
+    const cadre = el('div', 'fiche-produit')
+    const img = el('img')
+    img.src = photoMenu
+    img.alt = 'Le menu'
+    img.loading = 'lazy'
+    cadre.appendChild(img)
+    bloc.appendChild(cadre)
+  }
+  // Ni camion, ni menu, ni photo : l'organisateur a seulement dit qu'on
+  // mange sur place — on le dit aussi.
+  if (!bloc.children.length) bloc.appendChild(el('p', 'fiche-texte__p fiche-texte__p--centre', 'On peut manger sur place.'))
+  return bloc
+}
+
+function auteur(ev) {
+  const p = el('p', 'fiche-auteur', 'Publié par ')
+  const f = ev.author_fiche
+  if (!f) {
+    p.appendChild(document.createTextNode(ev.author_name || 'Anonyme'))
+    return p
+  }
+  const a = el('a', 'fiche-auteur__lien', f.name)
+  a.href = '#/fiche?id=' + encodeURIComponent(f.id)
+  p.appendChild(a)
+  return p
 }
 
 // Aperçu plein écran de la photo (tap ou Échap pour fermer).

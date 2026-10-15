@@ -217,6 +217,13 @@ body:has(.fiche) { background: #0b55c5; }
   font-size: 0.8rem;
   text-align: center;
 }
+/* Le nom d'un lieu ou d'un food truck : un lien vers sa fiche. */
+.fiche-auteur__lien {
+  color: var(--mask-yellow);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 /* --- Boutons ------------------------------------------------------------- */
 /* Le site (ou l'appel), en grand, jaune comme le bouton « + ». */
@@ -317,6 +324,84 @@ body:has(.fiche) { background: #0b55c5; }
    l'un touchait l'autre (retour de Matthieu). */
 .fiche .detail-actions .btn--danger { margin-top: 0.9rem; }
 .fiche .detail-actions .form__msg:empty { display: none; }
+
+/* --- Fiche d'un lieu ou d'un food truck (viewFiche.js) ------------------- */
+.fiche-entete__sous { margin: 0; color: var(--studio-ink); font-size: 0.95rem; font-weight: 600; }
+.fiche-texte__p--centre { text-align: center; text-align-last: center; }
+.fiche-menu { display: grid; gap: 0.55rem; margin: 0; padding: 0; list-style: none; text-align: left; }
+.fiche-menu__ligne {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed rgba(11, 85, 197, 0.2);
+}
+.fiche-menu__ligne:last-child { padding-bottom: 0; border-bottom: 0; }
+.fiche-menu__plat { flex: 1 1 auto; font-weight: 600; line-height: 1.4; }
+.fiche-menu__prix { flex: 0 0 auto; color: var(--studio-green); font-weight: 800; white-space: nowrap; }
+.fiche-produit img { display: block; width: 100%; border-radius: 14px; }
+.fiche-section-bleue {
+  margin: 1.4rem 0 0.7rem;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+}
+.fiche-evenements { display: grid; gap: 6px; }
+
+/* --- « Ma fiche » : état et photos (viewFicheEdit.js) -------------------- */
+.fiche-etat { margin: 0; padding: 0.7rem 0.9rem; border-radius: 14px; font-size: 0.88rem; font-weight: 700; line-height: 1.45; }
+.fiche-etat[hidden] { display: none; }
+.fiche-etat--attente { color: var(--studio-ink); background: rgba(244, 202, 21, 0.35); }
+.fiche-etat--publiee { color: #fff; background: var(--studio-green); }
+.fiche-etat--refusee { color: #fff; background: var(--studio-red); }
+.fiche-etat__lien { color: inherit; text-decoration: underline; }
+.fiche-edit-photo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  overflow: hidden;
+  border: 2px dashed rgba(11, 85, 197, 0.35);
+  border-radius: 16px;
+  background: #fff;
+  cursor: pointer;
+}
+.fiche-edit-photo img { display: block; width: 100%; max-height: 320px; object-fit: contain; }
+.fiche-edit-photo--vide img { display: none; }
+.fiche-edit-photo__invite { display: none; color: var(--studio-blue); font-weight: 700; font-size: 0.9rem; }
+.fiche-edit-photo--vide .fiche-edit-photo__invite { display: block; }
+.fiche-supprimer { margin-top: 1.4rem; }
+.fiche-supprimer[hidden] { display: none; }
+
+/* --- Inscription : l'aide sous « Vous êtes… » ---------------------------- */
+/* ⚠ Quatre classes : sur les écrans bleus, `.page--studio-blue.page--studio-sub
+   .form__hint` peint les aides en BLANC — invisible sur la carte crème de
+   l'inscription. Le piège de spécificité, une fois de plus. */
+.page--studio-blue.page--studio-sub .studio-auth-card .form__hint {
+  color: var(--studio-green);
+  line-height: 1.45;
+}
+
+/* --- Modération des fiches (viewAdmin.js) ------------------------------- */
+.moderation-fiches { display: grid; gap: 0.6rem; margin-bottom: 0.4rem; }
+.moderation-fiche {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  padding: 0.7rem;
+  border: 2px solid rgba(11, 85, 197, 0.2);
+  border-radius: 14px;
+  background: #fff;
+}
+.moderation-fiche__photo { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; }
+.moderation-fiche__corps { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.moderation-fiche__type { color: var(--studio-red); font-size: 0.66rem; font-weight: 900; text-transform: uppercase; }
+.moderation-fiche__nom { font-family: var(--font-display); font-size: 1.1rem; color: var(--studio-green); }
+.moderation-fiche__texte { margin: 0; font-size: 0.82rem; line-height: 1.4; color: var(--studio-ink); }
+.moderation-fiche__boutons { display: flex; gap: 0.35rem; margin-top: 0.35rem; flex-wrap: wrap; }
 
 /* --- Aperçu « À propos » dans le formulaire de publication --------------- */
 /* Le même bloc que sur la fiche, posé sur un cadre bleu : l'auteur voit son

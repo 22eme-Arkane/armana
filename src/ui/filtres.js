@@ -4,6 +4,7 @@
 // même que la rangée de styles de l'en-tête. Deux états séparés finiraient par
 // se contredire, et la rangée mentirait sur ce qui est réellement filtré.
 import { el } from './components.js'
+import { ouvrirCalendrier } from './calendrier.js'
 import { CATEGORIES } from '../lib/events.js'
 import { DEPARTEMENTS } from '../lib/departements.js'
 import {
@@ -12,6 +13,9 @@ import {
   basculerTarif,
   getQuand,
   getDepartementsEffectifs,
+  getJourPrecis,
+  libelleQuand,
+  setJourPrecis,
   getStyles,
   getTarifs,
   nbFiltresActifs,
@@ -29,6 +33,7 @@ const TARIFS = [
 const QUAND = [
   { cle: 'today', texte: 'Aujourd’hui' },
   { cle: 'weekend', texte: 'Ce week-end' },
+  { cle: 'semaine', texte: 'Cette semaine' },
 ]
 
 /**
@@ -103,6 +108,29 @@ export function ouvrirFiltres(onChange) {
     (q) => setQuand(q),
     null
   )
+
+  // « Choisir une date » : ouvre le calendrier du téléphone, jamais un champ à
+  // taper. Une fois choisie, la pastille affiche le jour ; la toucher à
+  // nouveau le relâche (même geste que les autres pastilles).
+  const rangeeQuand = corps.lastElementChild
+  const choisirDate = el('button', 'choix__option', 'Choisir une date')
+  choisirDate.type = 'button'
+  choisirDate.addEventListener('click', () => {
+    if (getJourPrecis()) {
+      setJourPrecis(null)
+      return majTout()
+    }
+    ouvrirCalendrier(null, (jour) => {
+      setJourPrecis(jour)
+      majTout()
+    })
+  })
+  rangeeQuand.appendChild(choisirDate)
+  peintres.push(() => {
+    const j = getJourPrecis()
+    choisirDate.classList.toggle('is-active', Boolean(j))
+    choisirDate.textContent = j ? libelleQuand() + ' ×' : 'Choisir une date'
+  })
 
   // ⚠ ON NE TOUCHE PAS AU CHOIX DURABLE DEPUIS ICI. Regarder le 05 un soir ne
   // doit pas réécrire les départements réglés dans Profil : `basculerDepartement`

@@ -6,8 +6,19 @@ import { supabase } from './supabaseClient.js'
 
 const state = {
   session: null,
-  profile: null, // { id, display_name, role }
+  profile: null, // { id, display_name, role, account_type }
 }
+
+/**
+ * Les types de compte (migration 0033). ⚠ Ils ne donnent AUCUN droit : ils
+ * disent seulement si la personne a une fiche publique (lieu, food truck).
+ */
+export const TYPES_COMPTE = [
+  { cle: 'particulier', texte: 'Particulier' },
+  { cle: 'lieu', texte: 'Lieu culturel' },
+  { cle: 'food_truck', texte: 'Food truck' },
+]
+const CLES_TYPE = TYPES_COMPTE.map((t) => t.cle)
 
 const listeners = new Set()
 
@@ -29,15 +40,51 @@ async function loadProfile() {
   }
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, role')
+    .select('id, display_name, role, account_type')
     .eq('id', state.session.user.id)
     .maybeSingle()
   if (error) {
     console.warn('[Armana] Profil non chargé :', error.message)
     state.profile = null
-  } else {
-    state.profile = data
+    return
   }
+  state.profile = data
+  // ⚠ LE TYPE CHOISI À L'INSCRIPTION ARRIVE PAR LES MÉTADONNÉES. Le trigger
+  // d'inscription ne recopie que le nom ; et quand l'e-mail doit d'abord être
+  // confirmé, il n'y a pas encore de session pour écrire le profil. Le choix
+  // voyage donc avec le compte, et s'applique à la première connexion — sur
+  // n'importe quel appareil. On ne l'applique qu'une fois, sur un profil resté
+  // « particulier » : un changement fait ensuite dans le Profil n'est jamais
+  // écrasé.
+  const voulu = state.session.user.user_metadata?.account_type
+  const fait = state.session.user.user_metadata?.account_type_applique
+  if (data && !fait && CLES_TYPE.includes(voulu) && voulu !== 'particulier') {
+    // ⚠ HORS du rappel d'authentification (setTimeout) : appeler une méthode
+    // d'auth depuis `onAuthStateChange` peut bloquer supabase-js.
+    setTimeout(() => appliquerTypeInscription(data, voulu), 0)
+  }
+}
+
+async function appliquerTypeInscription(profil, voulu) {
+  if (profil.account_type === 'particulier') {
+    const { error } = await supabase.from('profiles').update({ account_type: voulu }).eq('id', profil.id)
+    if (!error && state.profile?.id === profil.id) {
+      state.profile = { ...state.profile, account_type: voulu }
+      emit()
+    }
+  }
+  const { error } = await supabase.auth.updateUser({ data: { account_type_applique: true } })
+  if (error) console.warn('[Armana] Type de compte : marque non posée :', error.message)
+}
+
+/** Change le type de compte de la personne connectée (aucun droit associé). */
+export async function updateAccountType(type) {
+  const uid = state.session?.user?.id
+  if (!uid) throw new Error('Vous n’êtes pas connecté.')
+  if (!CLES_TYPE.includes(type)) throw new Error('Type de compte inconnu.')
+  const { error } = await supabase.from('profiles').update({ account_type: type }).eq('id', uid)
+  if (error) throw error
+  await refreshProfile()
 }
 
 /** Initialise l'état d'auth au démarrage et écoute les changements. */
@@ -107,12 +154,16 @@ export const getProfile = () => state.profile
 export const isLoggedIn = () => Boolean(state.session)
 export const isAdmin = () => state.profile?.role === 'admin'
 
-/** Inscription e-mail/mot de passe (+ display_name en metadata → trigger profil). */
-export async function signUp(email, password, displayName) {
+/**
+ * Inscription e-mail/mot de passe. `display_name` part en métadonnées pour le
+ * trigger du profil ; `account_type` aussi, appliqué à la première connexion
+ * (voir loadProfile).
+ */
+export async function signUp(email, password, displayName, accountType = 'particulier') {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { display_name: displayName } },
+    options: { data: { display_name: displayName, account_type: accountType } },
   })
   if (error) throw error
   return data

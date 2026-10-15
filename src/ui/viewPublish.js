@@ -11,7 +11,13 @@ import { icon } from './icons.js'
 import { studioHeader } from './studio.js'
 import { navigate } from '../lib/router.js'
 import { isLoggedIn } from '../lib/auth.js'
-import { DEFAULT_CENTER, geocodeAddress } from '../lib/geo.js'
+import { DEFAULT_CENTER } from '../lib/geo.js'
+import { chargerCommunes, communeDansLeTexte, communeLaPlusProche } from '../lib/communes.js'
+import { getMaFiche } from '../lib/fiches.js'
+import { rechercheCommune } from './rechercheCommune.js'
+import { menuEditeur } from './menuEditeur.js'
+import { foodTrucksAnnonces, foodTrucksValides, synchroniserFoodTrucks } from '../lib/foodTrucks.js'
+import './planning.css'
 import { JOURS, formatJourMois, serieProposee } from '../lib/recurrence.js'
 import { toDisplayableFile } from '../lib/heic.js'
 import { consumeDraft, consumeSharedFile } from '../lib/draft.js'
@@ -20,6 +26,8 @@ import {
   createEvent,
   updateEvent,
   uploadEventPhotos,
+  envoyerPhotoMenu,
+  retirerPhotoMenu,
   getEventById,
   isUpcoming,
 } from '../lib/events.js'
@@ -559,23 +567,215 @@ export async function viewPublish({ query } = {}) {
   }
   majTarif()
 
-  // Localisation : adresse + géocodage + mini-carte avec marqueur déplaçable.
+  // --- Restauration sur place (migration 0035) -------------------------------
+  // Matthieu, 15/10/2026 : l'organisateur peut annoncer les FOOD TRUCKS
+  // présents — choisis dans la liste des fiches validées, jamais tapés — et/ou
+  // dire qu'on mange sur place, avec un menu plat par plat et/ou sa photo.
+  // Tout allume le badge « Food sur place » de l'Agenda.
+  const restoWrap = el('div', 'form__field resto')
+  restoWrap.appendChild(el('span', 'form__label', 'Restauration sur place'))
+  const restoChoix = el('div', 'choix')
+  const restoNon = el('button', 'choix__option', 'Non')
+  restoNon.type = 'button'
+  const restoOui = el('button', 'choix__option', 'Oui, on peut manger sur place')
+  restoOui.type = 'button'
+  restoChoix.append(restoNon, restoOui)
+  restoWrap.appendChild(restoChoix)
+  const restoCorps = el('div', 'resto__corps')
+  restoWrap.appendChild(restoCorps)
+
+  let resto = Boolean(init.restauration || init.food_trucks?.length)
+  const trucksChoisis = new Set()
+  let photoMenu = null // nouveau fichier
+  let retirerMenu = false
+
+  // 1. Les food trucks — la liste des fiches validées, à cocher.
+  restoCorps.appendChild(el('span', 'form__label', 'Food trucks présents'))
+  const trucksListe = el('div', 'choix resto__trucks')
+  trucksListe.appendChild(el('span', 'form__hint', 'Chargement des food trucks…'))
+  restoCorps.appendChild(trucksListe)
+  restoCorps.appendChild(
+    el('p', 'form__hint', 'Seuls les food trucks inscrits et validés sur Armana apparaissent ici. Ils peuvent retirer la mention depuis leur planning.')
+  )
+  let trucksCharges = false
+  async function chargerTrucks() {
+    if (trucksCharges) return
+    trucksCharges = true
+    const [liste, deja] = await Promise.all([
+      foodTrucksValides(),
+      existing ? foodTrucksAnnonces(existing.id) : Promise.resolve([]),
+    ])
+    deja.forEach((id) => trucksChoisis.add(id))
+    trucksListe.innerHTML = ''
+    if (!liste.length) {
+      trucksListe.appendChild(el('span', 'form__hint', 'Aucun food truck n’est encore inscrit sur Armana.'))
+      return
+    }
+    for (const t of liste) {
+      const b = el('button', 'choix__option', t.name + (t.cuisine ? ` · ${t.cuisine}` : ''))
+      b.type = 'button'
+      b.classList.toggle('is-active', trucksChoisis.has(t.id))
+      b.addEventListener('click', () => {
+        if (trucksChoisis.has(t.id)) trucksChoisis.delete(t.id)
+        else if (trucksChoisis.size < 6) trucksChoisis.add(t.id)
+        b.classList.toggle('is-active', trucksChoisis.has(t.id))
+      })
+      trucksListe.appendChild(b)
+    }
+  }
+
+  // 2. Le menu, plat par plat, et/ou sa photo.
+  const menuResto = menuEditeur(init.restauration_menu, { titre: 'Menu (facultatif)' })
+  restoCorps.appendChild(menuResto.wrap)
+  const photoMenuWrap = el('div', 'form__field')
+  photoMenuWrap.appendChild(el('span', 'form__label', 'Photo du menu (facultatif)'))
+  const photoMenuApercu = el('div', 'fiche-edit-photo')
+  const photoMenuImg = el('img')
+  photoMenuImg.alt = ''
+  if (init.menu_photo_url) photoMenuImg.src = init.menu_photo_url
+  else photoMenuApercu.classList.add('fiche-edit-photo--vide')
+  photoMenuApercu.append(photoMenuImg, el('span', 'fiche-edit-photo__invite', 'Toucher pour choisir une photo'))
+  const photoMenuInput = el('input')
+  photoMenuInput.type = 'file'
+  photoMenuInput.accept = 'image/*'
+  photoMenuInput.hidden = true
+  const photoMenuAide = el('span', 'form__hint', 'Ardoise, carte, tableau des prix…')
+  const photoMenuRetirer = el('button', 'btn btn--ghost btn--sm', 'Retirer cette photo')
+  photoMenuRetirer.type = 'button'
+  photoMenuRetirer.hidden = !init.menu_photo_url
+  photoMenuWrap.append(photoMenuApercu, photoMenuInput, photoMenuAide, photoMenuRetirer)
+  restoCorps.appendChild(photoMenuWrap)
+  photoMenuApercu.addEventListener('click', () => photoMenuInput.click())
+  photoMenuInput.addEventListener('change', async () => {
+    const brut = photoMenuInput.files?.[0]
+    if (!brut) return
+    try {
+      const f = await toDisplayableFile(brut, (etape) => (photoMenuAide.textContent = etape))
+      photoMenu = f
+      retirerMenu = false
+      photoMenuImg.src = URL.createObjectURL(f)
+      photoMenuApercu.classList.remove('fiche-edit-photo--vide')
+      photoMenuRetirer.hidden = false
+      photoMenuAide.textContent = 'Elle sera envoyée à la publication.'
+    } catch (err) {
+      photoMenuAide.textContent = 'Photo illisible : ' + err.message
+    }
+  })
+  photoMenuRetirer.addEventListener('click', () => {
+    photoMenu = null
+    retirerMenu = Boolean(init.menu_photo_path)
+    photoMenuImg.removeAttribute('src')
+    photoMenuApercu.classList.add('fiche-edit-photo--vide')
+    photoMenuRetirer.hidden = true
+  })
+
+  function majResto() {
+    restoNon.classList.toggle('is-active', !resto)
+    restoOui.classList.toggle('is-active', resto)
+    restoCorps.hidden = !resto
+    if (resto) chargerTrucks()
+  }
+  restoNon.addEventListener('click', () => {
+    resto = false
+    majResto()
+  })
+  restoOui.addEventListener('click', () => {
+    resto = true
+    majResto()
+  })
+  majResto()
+
+  // Localisation : NOM DU LIEU (facultatif) + COMMUNE (choisie dans la liste
+  // officielle) + point sur la mini-carte.
+  // ⚠ DEMANDE DE MATTHIEU (15/10/2026) : un seul champ « Adresse » libre
+  // donnait sur l'Agenda tantôt « 04300 », tantôt « Mane », tantôt « Théâtre
+  // La Rirette ». La commune se CHOISIT désormais, le nom du lieu est à part.
   const locWrap = el('div', 'form__field')
-  locWrap.appendChild(el('span', 'form__label', 'Lieu *'))
-  const addrRow = el('div', 'form__row')
-  const addrInput = el('input', 'form__input')
-  addrInput.type = 'text'
-  addrInput.placeholder = 'Adresse ou ville (ex. Place du Marché, Digne-les-Bains)'
-  if (init.address) addrInput.value = init.address
-  const geoBtn = el('button', 'btn btn--ghost', 'Localiser')
-  geoBtn.type = 'button'
-  addrRow.appendChild(addrInput)
-  addrRow.appendChild(geoBtn)
-  locWrap.appendChild(addrRow)
-  const coordReadout = el('p', 'form__hint', 'Placez le marqueur sur le lieu exact.')
+  locWrap.appendChild(el('span', 'form__label', 'Nom du lieu'))
+  const placeInput = el('input', 'form__input')
+  placeInput.type = 'text'
+  placeInput.maxLength = 120
+  placeInput.placeholder = 'Théâtre, salle des fêtes, place du village…'
+  locWrap.appendChild(placeInput)
+  locWrap.appendChild(
+    el('p', 'form__hint', 'Facultatif, mais il aide à trouver : « Théâtre La Rirette », « Salle des fêtes ».')
+  )
+  locWrap.appendChild(el('span', 'form__label lieu-commune__label', 'Commune *'))
+  let communeChoisie = null
+  const communeChamp = rechercheCommune({
+    onChoix: (c) => {
+      communeChoisie = c
+      // Une commune choisie à la main recentre la carte sur elle ; on affine
+      // ensuite en touchant la carte.
+      if (c) setPoint(c.lat, c.lng)
+      refreshPreview()
+      saveSnapshot()
+    },
+  })
+  locWrap.appendChild(communeChamp.wrap)
+  const coordReadout = el('p', 'form__hint', 'Touchez la carte pour placer le lieu exact.')
   locWrap.appendChild(coordReadout)
   const pickMap = el('div', 'map map--pick')
   locWrap.appendChild(pickMap)
+
+  /** L'adresse écrite, recomposée : « Théâtre La Rirette, 04300 Mane ».
+   *  Elle reste en base pour les anciens téléphones, l'itinéraire et le partage. */
+  function adresseComposee() {
+    const c = communeChoisie
+    return [placeInput.value.trim(), c ? [c.cp, c.nom].filter(Boolean).join(' ') : ''].filter(Boolean).join(', ')
+  }
+
+  /** Pré-remplit la commune (et le nom du lieu) d'un événement existant, d'un
+   *  brouillon importé, ou de la fiche « lieu culturel » de l'auteur. */
+  async function preRemplirLieu() {
+    let communes
+    try {
+      communes = await chargerCommunes()
+    } catch {
+      return
+    }
+    const lat = Number(init.lat)
+    const lng = Number(init.lng)
+    if (init.city || init.address) {
+      const c =
+        (init.city && communes.find((x) => x.nom === init.city)) ||
+        communeDansLeTexte(communes, init.address, lat, lng) ||
+        communeLaPlusProche(communes, lat, lng)
+      if (c && !communeChoisie) {
+        communeChoisie = c
+        communeChamp.choisir(c, true)
+        // Message importé : une ville, pas encore de point.
+        if (state.lat == null) setPoint(c.lat, c.lng)
+      }
+      if (init.place_name) placeInput.value = init.place_name
+      else if (!init.city && init.address && c) {
+        // Ancien événement : ce qui précède le code postal et la commune
+        // devient le nom du lieu (« Chapelle St François, Couvent… »).
+        const reste = init.address
+          .replace(/\b\d{5}\b/g, '')
+          .replace(new RegExp(c.nom.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&'), 'i'), '')
+          .replace(/[\s,]+$/g, '')
+          .replace(/^[\s,]+/g, '')
+          .trim()
+        if (reste) placeInput.value = reste
+      }
+    } else if (!existing) {
+      // Nouvel événement d'un lieu culturel : son nom et sa commune d'office.
+      const fiche = await getMaFiche().catch(() => null)
+      if (fiche?.kind === 'lieu' && !placeInput.value && !communeChoisie) {
+        placeInput.value = fiche.name
+        const c =
+          communeDansLeTexte(communes, fiche.address, fiche.lat, fiche.lng) ||
+          communeLaPlusProche(communes, fiche.lat, fiche.lng)
+        if (c) {
+          communeChoisie = c
+          communeChamp.choisir(c, true)
+          if (state.lat == null) setPoint(fiche.lat ?? c.lat, fiche.lng ?? c.lng)
+        }
+      }
+    }
+    refreshPreview()
+  }
 
   // --- Photo(s) -------------------------------------------------------------
   // Un événement sur plusieurs jours peut avoir une affiche par journée : on
@@ -747,7 +947,8 @@ export async function viewPublish({ query } = {}) {
       id: 'preview',
       title: fTitle?.input.value.trim() || 'Titre de votre événement',
       starts_at: startsAt.toISOString(),
-      address: addrInput?.value.trim() || 'Lieu à préciser',
+      address: adresseComposee() || 'Lieu à préciser',
+      ville: communeChoisie?.nom || 'Commune ?',
       category: fCategory?.input.value || 'Catégorie ?',
       price_mode: tarif,
       is_paid: tarif === 'payant',
@@ -774,7 +975,8 @@ export async function viewPublish({ query } = {}) {
     setText('.poster-card__time', formatTime(ev.starts_at))
     setText('.poster-card__category', ev.category)
     setText('.poster-card__title', ev.title)
-    setText('.poster-card__place', ev.address)
+    // Comme sur l'Agenda : la commune seule.
+    setText('.poster-card__place', ev.ville)
     setText('.poster-card__price', formatPriceCourt(ev))
     frameTools.style.display = framingEnabled ? '' : 'none'
     syncFrameUi()
@@ -865,7 +1067,7 @@ export async function viewPublish({ query } = {}) {
     { titre: 'L’essentiel', champs: [fPhoto, fTitle.wrap, fCategory.wrap] },
     { titre: 'Quand', champs: [fDesc.wrap, apercuDesc, fStart.wrap, fEnd.wrap, recurWrap] },
     { titre: 'Où', champs: [locWrap] },
-    { titre: 'Détails', champs: [paidWrap, fContact.wrap] },
+    { titre: 'Détails', champs: [paidWrap, restoWrap, fContact.wrap] },
   ]
   const guide = !existing
 
@@ -981,7 +1183,8 @@ export async function viewPublish({ query } = {}) {
           chapeau,
           price: priceInput.value,
           priceDetail: detailInput.value,
-          address: addrInput.value,
+          placeName: placeInput.value,
+          commune: communeChoisie,
           lat: state.lat,
           lng: state.lng,
         })
@@ -1018,7 +1221,14 @@ export async function viewPublish({ query } = {}) {
       if (saved.price) priceInput.value = saved.price
       if (saved.priceDetail) detailInput.value = saved.priceDetail
       majTarif()
-      addrInput.value = saved.address ?? ''
+      if (saved.placeName) placeInput.value = saved.placeName
+      if (saved.commune?.nom) {
+        communeChoisie = saved.commune
+        communeChamp.choisir(saved.commune, true)
+      } else if (saved.address) {
+        // Brouillon d'avant le choix de la commune : on la retrouvera dedans.
+        init.address = saved.address
+      }
       if (saved.lat != null) {
         state.lat = saved.lat
         state.lng = saved.lng
@@ -1067,31 +1277,6 @@ export async function viewPublish({ query } = {}) {
     if (recenter) map.setView([lat, lng], 14)
   }
 
-  geoBtn.addEventListener('click', async () => {
-    const q = addrInput.value.trim()
-    if (!q) return
-    geoBtn.disabled = true
-    geoBtn.textContent = '…'
-    try {
-      const r = await geocodeAddress(q)
-      if (!r) {
-        msg.className = 'form__msg form__msg--err'
-        msg.textContent = 'Adresse introuvable. Placez le marqueur manuellement.'
-      } else {
-        setPoint(r.lat, r.lng)
-        msg.className = 'form__msg'
-        msg.textContent = ''
-      }
-    } catch (e) {
-      msg.className = 'form__msg form__msg--err'
-      msg.textContent =
-        'Recherche impossible (' + e.message + '). Touchez directement la carte pour placer le lieu.'
-    } finally {
-      geoBtn.disabled = false
-      geoBtn.textContent = 'Localiser'
-    }
-  })
-
   // ⚠ setTimeout ET NON requestAnimationFrame. rAF est GELÉ quand l'onglet
   // n'est pas au premier plan : la carte ne se construisait alors jamais. Même
   // correction que sur la carte principale, où le piège avait déjà mordu.
@@ -1117,8 +1302,10 @@ export async function viewPublish({ query } = {}) {
     if (state.lat != null) setPoint(state.lat, state.lng)
     map.on('click', (e) => setPoint(e.latlng.lat, e.latlng.lng, false))
     setTimeout(() => map.invalidateSize(), 100)
-    // Depuis un message : une ville a été détectée mais pas de coordonnées → géocode auto.
-    if (draft && state.lat == null && addrInput.value.trim()) geoBtn.click()
+    // La commune (et le nom du lieu) d'un événement existant, d'un message
+    // importé ou de la fiche de l'auteur. Plus de géocodage Nominatim : la
+    // commune choisie donne le point, la carte l'affine.
+    preRemplirLieu()
   })
 
   // --- Soumission ---
@@ -1158,8 +1345,9 @@ export async function viewPublish({ query } = {}) {
     ) {
       return
     }
+    if (!communeChoisie) return fail('Choisissez la commune dans la liste.')
     if (state.lat == null || state.lng == null)
-      return fail('Placez le lieu sur la carte (adresse ou clic).')
+      return fail('Placez le lieu sur la carte (touchez la carte).')
     if (ends_at && ends_at < starts_at) return fail('La fin est avant le début.')
 
     // Répétition. Deux formes exclusives : les jours de la semaine sur une
@@ -1196,7 +1384,13 @@ export async function viewPublish({ query } = {}) {
       au_chapeau: chapeau,
       lat: state.lat,
       lng: state.lng,
-      address: addrInput.value.trim(),
+      address: adresseComposee(),
+      // Migration 0035 : le lieu et la commune, séparés.
+      place_name: placeInput.value.trim(),
+      city: communeChoisie.nom,
+      // Restauration sur place (migration 0035).
+      restauration: resto,
+      restauration_menu: resto ? menuResto.valeur() : '',
       category: fCategory.input.value,
       recur_days: recurrence,
       recur_dates: series,
@@ -1238,6 +1432,18 @@ export async function viewPublish({ query } = {}) {
           submit.addEventListener('click', () => navigate('/mes-evenements'), { once: true })
           return
         }
+      }
+      // Food trucks annoncés et photo du menu. ⚠ Jamais bloquant : l'événement
+      // est déjà enregistré, un échec ici (migration 0035 absente, réseau) ne
+      // doit pas faire croire que rien n'est parti.
+      try {
+        if (trucksCharges || !resto) await synchroniserFoodTrucks(row.id, resto ? [...trucksChoisis] : [])
+        if (resto && photoMenu) await envoyerPhotoMenu(row.id, photoMenu)
+        else if ((!resto || retirerMenu) && init.menu_photo_path) {
+          await retirerPhotoMenu(row.id, init.menu_photo_path)
+        }
+      } catch (re) {
+        console.warn('[Armana] Restauration non enregistrée :', re.message)
       }
       // Publication réussie : le brouillon persistant n'a plus lieu d'être.
       if (!existing) {

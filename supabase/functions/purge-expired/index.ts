@@ -81,8 +81,12 @@ Deno.serve(async (req) => {
   for (const p of photos ?? []) {
     const path = (p as { storage_path: string }).storage_path
     files.push(path)
-    // La vignette est déduite du chemin (convention {uid}/{eventId}/photo.webp).
-    if (path.endsWith('photo.webp')) files.push(path.replace(/photo\.webp$/, 'thumb.webp'))
+    // La vignette est déduite du chemin : photo.webp → thumb.webp, et depuis
+    // les photos multiples photo-N.webp → thumb-N.webp. ⚠ Ne reconnaître que
+    // la première forme laissait toutes les vignettes récentes ORPHELINES dans
+    // le Storage (même règle que thumbPath, src/lib/events.js).
+    const vignette = path.replace(/photo(-\d+)?\.webp$/, (_m, n) => 'thumb' + (n || '') + '.webp')
+    if (vignette !== path) files.push(vignette)
   }
 
   // 3) Supprimer les FICHIERS Storage EN PREMIER, par paquets.

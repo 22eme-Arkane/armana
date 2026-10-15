@@ -41,6 +41,17 @@ export async function viewSettings() {
   // appartiennent, à la demande de Matthieu, plutôt qu'à côté de la
   // déconnexion. Sans compte, il n'y a pas de profil à modifier.
   if (logged) pub.appendChild(rowNav(icon('user'), 'Mon profil', '/mon-profil'))
+  // La fiche d'un lieu ou d'un food truck (migration 0033), seulement pour ces
+  // types de compte : un particulier n'a pas de vitrine à tenir.
+  const type = getProfile()?.account_type
+  if (logged && (type === 'lieu' || type === 'food_truck')) {
+    pub.appendChild(
+      rowNav(icon('image'), type === 'food_truck' ? 'Ma fiche de food truck' : 'Ma fiche de lieu', '/ma-fiche')
+    )
+    // Le planning, à portée d'un geste : c'est l'écran qu'un camion ouvre
+    // chaque semaine, pas sa fiche.
+    if (type === 'food_truck') pub.appendChild(rowNav(icon('calendar'), 'Mon planning', '/mon-planning'))
+  }
   wrap.appendChild(pub)
 
   // --- Groupe 2 : la communauté ---

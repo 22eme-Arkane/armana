@@ -11,9 +11,11 @@ import { navigate } from '../lib/router.js'
 import {
   NOM_MAX,
   NOM_MIN,
+  TYPES_COMPTE,
   getProfile,
   getUser,
   isLoggedIn,
+  updateAccountType,
   updateDisplayName,
 } from '../lib/auth.js'
 
@@ -83,6 +85,52 @@ export function viewProfilEdit() {
   })
 
   wrap.appendChild(form)
+
+  // --- Type de compte (migration 0033) ------------------------------------
+  // ⚠ Il ne donne AUCUN droit : il ouvre seulement la fiche d'un lieu ou d'un
+  // food truck, qu'un modérateur valide avant qu'elle soit publique.
+  const typeBloc = el('div', 'form')
+  typeBloc.appendChild(el('span', 'form__label', 'Vous êtes…'))
+  const typeRow = el('div', 'choix')
+  const typeMsg = el('p', 'form__msg')
+  const ficheBtn = el('button', 'btn btn--primary btn--block')
+  ficheBtn.type = 'button'
+  ficheBtn.addEventListener('click', () => navigate('/ma-fiche'))
+  const typeBtns = TYPES_COMPTE.map((t) => {
+    const b = el('button', 'choix__option', t.texte)
+    b.type = 'button'
+    b.addEventListener('click', async () => {
+      if (t.cle === getProfile()?.account_type) return
+      typeBtns.forEach((x) => (x.disabled = true))
+      typeMsg.className = 'form__msg'
+      typeMsg.textContent = 'Enregistrement…'
+      try {
+        await updateAccountType(t.cle)
+        typeMsg.className = 'form__msg form__msg--ok'
+        typeMsg.textContent =
+          t.cle === 'particulier'
+            ? 'C’est noté. Si vous aviez une fiche, elle reste en ligne : vous pouvez la supprimer depuis « Ma fiche ».'
+            : 'C’est noté. Vous pouvez maintenant créer votre fiche.'
+      } catch (err) {
+        typeMsg.className = 'form__msg form__msg--err'
+        typeMsg.textContent = 'Modification impossible : ' + err.message
+      } finally {
+        typeBtns.forEach((x) => (x.disabled = false))
+        peindreType()
+      }
+    })
+    typeRow.appendChild(b)
+    return b
+  })
+  function peindreType() {
+    const actuel = getProfile()?.account_type || 'particulier'
+    TYPES_COMPTE.forEach((t, i) => typeBtns[i].classList.toggle('is-active', t.cle === actuel))
+    ficheBtn.hidden = actuel === 'particulier'
+    ficheBtn.textContent = actuel === 'food_truck' ? 'Ma fiche de food truck' : 'Ma fiche de lieu'
+  }
+  typeBloc.append(typeRow, typeMsg, ficheBtn)
+  peindreType()
+  wrap.appendChild(typeBloc)
 
   // L'adresse e-mail et le mot de passe ne se changent pas ici : ce sont des
   // opérations d'authentification, qui passent par un e-mail de confirmation.

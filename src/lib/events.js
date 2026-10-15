@@ -7,6 +7,9 @@
 import { supabase } from './supabaseClient.js'
 import { getUser } from './auth.js'
 import { makePhotoVariants } from './image.js'
+import { fichesPubliees } from './fiches.js'
+import { foodSurPlace } from './foodTrucks.js'
+import { chargerCommunes, villeDeLEvenement } from './communes.js'
 
 export const CATEGORIES = [
   'Musique',
@@ -72,20 +75,38 @@ async function attachRelations(events) {
   const ids = list.map((e) => e.id)
   const creatorIds = [...new Set(list.map((e) => e.created_by))]
 
-  const [photosRes, profilesRes] = await Promise.all([
+  const [photosRes, profilesRes, fiches, food, communes] = await Promise.all([
     supabase
       .from('event_photos')
       .select('event_id, storage_path, position')
       .in('event_id', ids)
       .order('position', { ascending: true }),
     supabase.from('profiles').select('id, display_name').in('id', creatorIds),
+    // Les fiches PUBLIÉES des auteurs (lieux, food trucks) : « Publié par »
+    // devient un lien vers elles. Ne lève jamais (voir fichesPubliees).
+    fichesPubliees(creatorIds),
+    // Les food trucks annoncés sur l'événement : badge « Food sur place »
+    // (migration 0034). Ne lève jamais.
+    foodSurPlace(),
+    // La liste des communes, pour donner à CHAQUE événement une ville propre
+    // — y compris ceux publiés avant le choix de la commune (migration 0035).
+    // En cache après le premier chargement ; sans elle, on retombe sur
+    // l'extraction depuis l'adresse.
+    chargerCommunes().catch(() => null),
   ])
 
   // Toutes les photos, rangées par position : la position N correspond au
   // JOUR N+1 d'un événement qui dure plusieurs jours (un festival peut avoir
   // une affiche par journée).
   const parEvenement = new Map()
+  // La photo du MENU (restauration sur place) vit à la position 100 : elle ne
+  // doit jamais passer pour l'affiche d'un jour.
+  const menuParEvenement = new Map()
   for (const p of photosRes.data ?? []) {
+    if (p.position >= POSITION_MENU) {
+      menuParEvenement.set(p.event_id, p.storage_path)
+      continue
+    }
     if (!parEvenement.has(p.event_id)) parEvenement.set(p.event_id, [])
     parEvenement.get(p.event_id).push(p.storage_path)
   }
@@ -100,6 +121,11 @@ async function attachRelations(events) {
     return {
       ...e,
       author_name: nameById.get(e.created_by) ?? 'Anonyme',
+      author_fiche: fiches.get(e.created_by) ?? null,
+      food_trucks: food.get(e.id) ?? [],
+      ville: villeDeLEvenement(e, communes),
+      menu_photo_path: menuParEvenement.get(e.id) ?? null,
+      menu_photo_url: menuParEvenement.has(e.id) ? publicPhotoUrl(menuParEvenement.get(e.id)) : null,
       photos,
       // La première reste celle qui représente l'événement (carte, détail).
       photo_url: photos[0]?.photo_url ?? null,
@@ -120,6 +146,15 @@ export async function listApprovedEvents() {
   else q = q.eq('status', 'approved')
   q = applyUpcoming(q)
   const { data, error } = await q.order('starts_at', { ascending: true })
+  if (error) throw error
+  return attachRelations(data)
+}
+
+/** Les événements PUBLIÉS et à venir d'un auteur — pour la fiche d'un lieu. */
+export async function listEventsByAuthor(authorId) {
+  let q = supabase.from('events_geo').select('*').eq('status', 'approved').eq('created_by', authorId)
+  q = applyUpcoming(q)
+  const { data, error } = await q.order('starts_at', { ascending: true }).limit(20)
   if (error) throw error
   return attachRelations(data)
 }
@@ -180,9 +215,32 @@ export async function listPendingEvents() {
   return attachRelations(data)
 }
 
+/**
+ * Appelle une RPC de publication avec le lieu et la commune (migration 0035).
+ * ⚠ Sans la migration, PostgREST ne trouve aucune fonction à ces paramètres
+ * et PLUS PERSONNE NE PUBLIERAIT : on retente alors sans eux.
+ */
+async function rpcAvecLieu(nom, params, p) {
+  const complet = {
+    ...params,
+    p_place_name: p.place_name ?? '',
+    p_city: p.city ?? null,
+    // Restauration sur place (même migration) ; null = inconnu, le serveur garde.
+    p_restauration: typeof p.restauration === 'boolean' ? p.restauration : null,
+    p_restauration_menu: p.restauration_menu ?? '',
+  }
+  let r = await supabase.rpc(nom, complet)
+  if (r.error && /p_city|p_place_name|p_restauration|could not find the function/i.test(r.error.message)) {
+    console.warn('[Armana] Migration 0035 absente : lieu et commune non enregistrés.')
+    r = await supabase.rpc(nom, params)
+  }
+  if (r.error) throw r.error
+  return r.data
+}
+
 /** Crée un événement (statut 'pending') via la RPC sécurisée. Renvoie la ligne. */
 export async function createEvent(p) {
-  const { data, error } = await supabase.rpc('create_event', {
+  return rpcAvecLieu('create_event', {
     p_title: p.title,
     p_description: p.description ?? '',
     p_starts_at: p.starts_at,
@@ -205,14 +263,12 @@ export async function createEvent(p) {
     p_price_mode: p.price_mode ?? '',
     // « Au chapeau », complément du tarif (migration 0032).
     p_au_chapeau: Boolean(p.au_chapeau),
-  })
-  if (error) throw error
-  return data
+  }, p)
 }
 
 /** Met à jour un événement (repasse en 'pending' si non-admin). */
 export async function updateEvent(id, p) {
-  const { data, error } = await supabase.rpc('update_event', {
+  return rpcAvecLieu('update_event', {
     p_id: id,
     p_title: p.title,
     p_description: p.description ?? '',
@@ -237,9 +293,7 @@ export async function updateEvent(id, p) {
     // « Au chapeau » (migration 0032). `null` si l'appelant ne le connaît pas :
     // le serveur garde alors la valeur en place au lieu de l'effacer.
     p_au_chapeau: typeof p.au_chapeau === 'boolean' ? p.au_chapeau : null,
-  })
-  if (error) throw error
-  return data
+  }, p)
 }
 
 /**
@@ -348,6 +402,26 @@ export async function uploadEventPhotos(eventId, entrees) {
   return lignes.map((l) => l.storage_path)
 }
 
+/** Position réservée à la photo du menu (restauration sur place, 0035). */
+export const POSITION_MENU = 100
+
+/** Envoie (ou remplace) la photo du menu d'un événement. */
+export async function envoyerPhotoMenu(eventId, file) {
+  return uploadEventPhotos(eventId, [{ file, crop: null, position: POSITION_MENU }])
+}
+
+/** Retire la photo du menu : les FICHIERS d'abord, la ligne ensuite. */
+export async function retirerPhotoMenu(eventId, chemin) {
+  if (!chemin) return
+  await supabase.storage.from('event-photos').remove([chemin, thumbPath(chemin)].filter(Boolean))
+  const { error } = await supabase
+    .from('event_photos')
+    .delete()
+    .eq('event_id', eventId)
+    .eq('position', POSITION_MENU)
+  if (error) throw error
+}
+
 /** Compatibilité : une seule photo, en première position. */
 export async function uploadEventPhoto(eventId, file, crop = null) {
   const [chemin] = await uploadEventPhotos(eventId, [{ file, crop, position: 0 }])
@@ -363,6 +437,10 @@ export async function uploadEventPhoto(eventId, file, crop = null) {
  * occuperaient le quota pour toujours.
  */
 export async function purgePastMonths() {
+  // Au passage, le ménage des food trucks (exceptions passées, vieux
+  // signalements — migration 0034). Planifié chaque nuit en base ; le rejouer
+  // ici ne coûte rien. Sans la migration, l'échec est ignoré.
+  supabase.rpc('nettoyer_food_trucks').then(() => {}, () => {})
   const { data, error } = await supabase.rpc('expired_events_before_month')
   if (error) throw error
   const rows = data ?? []

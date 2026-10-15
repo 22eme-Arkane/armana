@@ -3,16 +3,47 @@ import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import '../lib/leafletIcons.js' // correctif icônes marqueur (Vite)
 
-import { el, formatDate, formatTime, formatPrice, toggleRow } from './components.js'
+import { el, formatDate, formatTime, formatPrice, tarifMode } from './components.js'
 import { icon } from './icons.js'
 import { navigate, refresh } from '../lib/router.js'
 import { DEFAULT_CENTER, getUserLocation, locationErrorMessage } from '../lib/geo.js'
 import { eventsWithinRadius } from '../lib/events.js'
-import { dayKey, eventDayKeys } from '../lib/recurrence.js'
+// ⚠ Par jours COUVERTS (eventDayKeys), jamais « début ≤ jour ≤ fin » : un
+// événement récurrent couvre une longue période mais pas tous ses jours.
+import { eventDayKeys } from '../lib/recurrence.js'
 import { tagVisitDept } from '../lib/admins.js'
-import { isLoggedIn } from '../lib/auth.js'
-import { getCategory, getDepartementsEffectifs, setCategory } from '../lib/filter.js'
-import { CATEGORIES } from '../lib/events.js'
+import {
+  appliquerFiltres,
+  getDepartementsEffectifs,
+  getJourPrecis,
+  getQuand,
+  joursDeQuand,
+  libelleQuand,
+  nbFiltresActifs,
+  onFilterChange,
+  setJourPrecis,
+  setQuand,
+} from '../lib/filter.js'
+import { ouvrirFiltres } from './filtres.js'
+import { foodTrucksSurCarte } from '../lib/fiches.js'
+import {
+  JOURS,
+  aujourdhuiParis,
+  foodTrucksAujourdhui,
+  foodTrucksPeriode,
+  jourIso,
+  plageHoraire,
+} from '../lib/foodTrucks.js'
+import { ouvrirCalendrier } from './calendrier.js'
+
+/** AAAA-MM-JJ décalé de n jours. */
+function dansNJours(ymd, n) {
+  const d = new Date(ymd + 'T12:00:00')
+  d.setDate(d.getDate() + n)
+  return d.toLocaleDateString('en-CA')
+}
+
+const majuscule = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 import { studioHeader, boutonPartage } from './studio.js'
 import {
   anneauxExterieurs,
@@ -21,10 +52,7 @@ import {
   loadDepartements,
   nomDepartement,
   estActif,
-  CODES_DEPARTEMENTS,
-  DEPARTEMENTS,
 } from '../lib/departements.js'
-import { getMesDepartements, setMesDepartements } from '../lib/mesDepartements.js'
 
 // Le sélecteur de rayon (10/20/50 km) a été retiré : un rayon n'apportait
 // qu'un filtre de plus à comprendre, dont le seul effet était de cacher des
@@ -35,13 +63,6 @@ const RAYON_M = 300000
 // Zoom d'ouverture, autrefois déduit du cercle de rayon.
 const ZOOM_DEPART = 9
 
-// ⚠ Un intervalle « start ≤ jour ≤ end » ne suffit plus : un événement récurrent
-// couvre une longue période mais seulement certains jours de la semaine. On
-// passe donc par le même calcul que l'Agenda (src/lib/recurrence.js).
-const ymd = dayKey
-function coversDay(ev, day) {
-  return eventDayKeys(ev).includes(day)
-}
 
 /**
  * Liseré jaune sur les frontières — INTERRUPTEUR.
@@ -77,177 +98,175 @@ const MARQUEUR_ARMANA = L.divIcon({
   popupAnchor: [0, -48],
 })
 
+// Marqueur de food truck : un rond rouge au camion blanc. Volontairement d'une
+// AUTRE FORME que la goutte des événements — on doit distinguer les deux d'un
+// coup d'œil, même sans couleurs.
+const MARQUEUR_FOOD_TRUCK = L.divIcon({
+  className: 'marqueur-food-truck',
+  html: `
+    <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="20" cy="20" r="17.5" fill="#f04b2f" stroke="#fff" stroke-width="3"/>
+      <g transform="translate(9 9) scale(0.92)" fill="none" stroke="#fff" stroke-width="2.2"
+         stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/>
+        <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+        <circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
+      </g>
+    </svg>`,
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
+  popupAnchor: [0, -18],
+})
+
 export async function viewMap() {
   const wrap = el('section', 'screen screen--studio-map')
   const head = studioHeader('Carte', { tone: 'blue', actions: [boutonPartage()] })
 
   wrap.appendChild(head)
 
-  // --- Filtres en pastilles, sur UNE ligne ---------------------------------
-  // Les gros panneaux d'avant mangeaient la moitié de l'écran. Trois pastilles
-  // compactes ouvrent chacune leur menu : le territoire, le style, la date.
-  // (Matthieu en voulait deux ; garder la date en troisième évite de perdre un
-  // filtre qui existait et qui sert.)
+  // --- Pastilles, sur UNE ligne ---------------------------------------------
+  // « Filtres » ouvre LE MÊME panneau que l'Agenda (styles, tarif, quand,
+  // départements) : un seul état, partagé, au lieu des deux menus « territoire »
+  // et « style » propres à la carte, qui en étaient une version appauvrie.
+  // La date précise y est aussi, depuis le 15/10/2026. Puis le mode Food trucks.
   const barre = el('section', 'map-pills')
   barre.setAttribute('aria-label', 'Filtres de la carte')
 
-  let selectedDate = null
-  let menuOuvert = null
-
-  /** Ferme le menu ouvert, s'il y en a un. */
-  const fermerMenu = () => {
-    if (!menuOuvert) return
-    menuOuvert.panneau.remove()
-    menuOuvert.pastille.setAttribute('aria-expanded', 'false')
-    menuOuvert = null
-  }
-  document.addEventListener('click', (e) => {
-    if (menuOuvert && !menuOuvert.pastille.contains(e.target) && !menuOuvert.panneau.contains(e.target)) {
-      fermerMenu()
-    }
-  })
-
-  /** Une pastille + son menu déroulant. `remplir` peuple le panneau. */
-  function pastilleMenu(iconeNom, remplir) {
+  /** Une pastille simple, sans menu : un geste, un effet. */
+  function pastilleBouton(iconeNom, texte, onClick) {
     const p = el('button', 'map-pill')
     p.type = 'button'
-    p.setAttribute('aria-haspopup', 'true')
-    p.setAttribute('aria-expanded', 'false')
     p.appendChild(icon(iconeNom))
-    const txt = el('span', 'map-pill__texte')
+    const txt = el('span', 'map-pill__texte', texte)
     p.appendChild(txt)
-    p.appendChild(icon('chevronDown'))
-    p.addEventListener('click', (e) => {
-      e.stopPropagation()
-      if (menuOuvert?.pastille === p) return fermerMenu()
-      fermerMenu()
-      // ⚠ Le panneau est posé sur le CADRE DE LA CARTE, jamais dans la barre
-      // de pastilles : celle-ci défile horizontalement (`overflow-x: auto`),
-      // ce qui découpe aussi ce qui dépasse en hauteur. Le menu s'y réduisait
-      // à un trait sous les pastilles, et rien n'était sélectionnable.
-      const panneau = el('div', 'map-menu')
-      remplir(panneau)
-      mapFrame.appendChild(panneau)
-      // Aligné sous SA pastille, dans les limites de la carte.
-      const r = p.getBoundingClientRect()
-      const cadre = mapFrame.getBoundingClientRect()
-      panneau.style.left = Math.max(8, Math.min(r.left - cadre.left, cadre.width - 248)) + 'px'
-      panneau.style.top = r.bottom - cadre.top + 6 + 'px'
-      p.setAttribute('aria-expanded', 'true')
-      menuOuvert = { pastille: p, panneau }
-    })
+    p.addEventListener('click', onClick)
     barre.appendChild(p)
     p.texte = txt
     return p
   }
 
-  // 1. Territoire — les mêmes départements que le Profil, réglés ici aussi.
-  const pDepts = pastilleMenu('pin', (panneau) => {
-    // ⚠ Même règle que l'écran « Mes départements » : choisir son territoire
-    // demande un compte. Sans ce garde-fou, la carte offrait une seconde porte
-    // vers le même réglage, et la règle se contournait d'un geste.
-    if (!isLoggedIn()) {
-      panneau.appendChild(
-        el(
-          'p',
-          'map-menu__note',
-          'Créez votre compte pour choisir les départements que vous suivez.'
-        )
-      )
-      const b = el('button', 'map-menu__item map-menu__item--action', 'Se connecter / S’inscrire')
-      b.type = 'button'
-      b.addEventListener('click', () => {
-        fermerMenu()
-        navigate('/connexion')
-      })
-      panneau.appendChild(b)
-      return
-    }
-    for (const d of DEPARTEMENTS) {
-      const ligne = toggleRow(d.nom, {
-        prefix: el('span', 'dept-num', d.code),
-        actif: getMesDepartements().includes(d.code),
-        onChange: (veut) => {
-          const avant = getMesDepartements()
-          const suite = veut ? [...new Set([...avant, d.code])] : avant.filter((c) => c !== d.code)
-          const retenu = setMesDepartements(suite)
-          // Le stockage refuse une liste vide : on reflète ce qu'il a retenu.
-          if (retenu.includes(d.code) !== veut) return false
-          // Le masque et les limites de la carte sont bâtis à l'initialisation
-          // de Leaflet : on re-rend l'écran entier plutôt que de démonter des
-          // couches à la main — un département décoché doit VRAIMENT repasser
-          // sous le masque, pas seulement perdre ses marqueurs.
-          fermerMenu()
-          refresh()
-        },
-      })
-      panneau.appendChild(ligne)
-    }
-  })
-  const majDepts = () => {
-    const c = getMesDepartements()
-    pDepts.texte.textContent =
-      c.length === CODES_DEPARTEMENTS.length ? 'Tout le territoire' : c.join(' · ')
+  // 1. Filtres — le panneau de l'Agenda, avec le nombre de filtres actifs : un
+  //    filtre qui ne se voit pas est un filtre qu'on oublie.
+  const pFiltres = pastilleBouton('sliders', 'Filtres', () => ouvrirFiltres(() => {}))
+  pFiltres.setAttribute('aria-haspopup', 'dialog')
+  const majFiltres = () => {
+    // La date a sa propre pastille juste à côté : la compter ici aussi la
+    // signalerait deux fois (et « Filtres · 1 » ne tenait plus sur la ligne).
+    const n = nbFiltresActifs() - (libelleQuand() ? 1 : 0)
+    pFiltres.texte.textContent = n ? `Filtres · ${n}` : 'Filtres'
+    pFiltres.classList.toggle('is-active', n > 0)
   }
-  majDepts()
+  majFiltres()
 
-  // 2. Style — filtre partagé avec l'Agenda.
-  const pCat = pastilleMenu('ticket', (panneau) => {
-    const choisir = (label, value) => {
-      const b = el('button', 'map-menu__item', label)
-      b.type = 'button'
-      if ((getCategory() ?? null) === value) b.classList.add('is-active')
-      b.addEventListener('click', () => {
-        setCategory(value)
-        majCat()
-        fermerMenu()
-        loadEvents()
-      })
-      panneau.appendChild(b)
+  // ⚠ LES DÉPARTEMENTS NE SE RATTRAPENT PAS EN RECHARGEANT LES POINTS. Le masque
+  // et les limites de navigation sont bâtis à l'initialisation de Leaflet :
+  // quand ils changent, on re-rend l'écran entier — un département décoché doit
+  // VRAIMENT repasser sous le masque, pas seulement perdre ses marqueurs.
+  // Le reste (styles, tarif, quand) ne demande qu'un nouveau tri des points.
+  // Débranché seul quand la vue quitte le DOM, comme dans l'Agenda.
+  const codesAuRendu = getDepartementsEffectifs().join(',')
+  const desabonner = onFilterChange(() => {
+    if (!wrap.isConnected) return desabonner()
+    if (getDepartementsEffectifs().join(',') !== codesAuRendu) {
+      desabonner()
+      return refresh()
     }
-    choisir('Tous les styles', null)
-    for (const cat of CATEGORIES) choisir(cat, cat)
+    majFiltres()
+    majDate()
+    loadEvents()
+    loadFoodTrucks()
   })
-  const majCat = () => {
-    pCat.texte.textContent = getCategory() ?? 'Tous les styles'
-  }
-  majCat()
 
-  // 3. Date — un jour précis, ou tout.
-  const pDate = pastilleMenu('calendar', (panneau) => {
-    const champ = el('input', 'map-date')
-    champ.type = 'date'
-    champ.min = ymd(new Date())
-    champ.value = selectedDate ?? ''
-    champ.setAttribute('aria-label', 'Filtrer par date')
-    champ.addEventListener('change', () => {
-      selectedDate = champ.value || null
-      majDate()
-      fermerMenu()
-      loadEvents()
-    })
-    panneau.appendChild(champ)
-    const tout = el('button', 'map-menu__item', 'Toutes les dates')
-    tout.type = 'button'
-    if (!selectedDate) tout.classList.add('is-active')
-    tout.addEventListener('click', () => {
-      selectedDate = null
-      majDate()
-      fermerMenu()
-      loadEvents()
-    })
-    panneau.appendChild(tout)
+  // 2. Date — à côté de « Filtres » (Matthieu, 15/10/2026). Un petit menu :
+  //    aujourd'hui, ce week-end, cette semaine, ou un jour choisi dans le
+  //    calendrier. MÊME ÉTAT que le panneau (lib/filter.js) : la date choisie
+  //    ici vaut pour l'Agenda, et pour les food trucks.
+  const pDate = pastilleBouton('calendar', 'Date', () => {
+    if (menuDate) return fermerMenuDate()
+    ouvrirMenuDate()
   })
+  pDate.appendChild(icon('chevronDown'))
+  pDate.setAttribute('aria-haspopup', 'true')
   const majDate = () => {
-    pDate.texte.textContent = selectedDate
-      ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('fr-FR', {
-          day: 'numeric',
-          month: 'short',
-        })
-      : 'Toutes les dates'
-    pDate.classList.toggle('is-active', Boolean(selectedDate))
+    const l = libelleQuand()
+    // Libellés COURTS : la barre partage sa ligne avec « Food trucks », et
+    // « Cette semaine » s'y faisait couper à 360 px.
+    const j = getJourPrecis()
+    pDate.texte.textContent = j
+      ? new Date(j + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      : ({ weekend: 'Week-end', semaine: 'Semaine' }[getQuand()] ?? l ?? 'Date')
+    pDate.classList.toggle('is-active', Boolean(l))
   }
   majDate()
+
+  let menuDate = null
+  function fermerMenuDate() {
+    menuDate?.remove()
+    menuDate = null
+    pDate.setAttribute('aria-expanded', 'false')
+  }
+  function ouvrirMenuDate() {
+    // ⚠ Le menu est posé sur le CADRE DE LA CARTE, jamais dans la barre de
+    // pastilles : celle-ci défile horizontalement et découperait ce qui
+    // dépasse (le menu s'y réduisait autrefois à un trait).
+    const panneau = el('div', 'map-menu')
+    const choix = (texte, actif, action) => {
+      const b = el('button', 'map-menu__item', texte)
+      b.type = 'button'
+      if (actif) b.classList.add('is-active')
+      b.addEventListener('click', () => {
+        fermerMenuDate()
+        action()
+      })
+      panneau.appendChild(b)
+    }
+    const q = getQuand()
+    const j = getJourPrecis()
+    choix('Toutes les dates', !q && !j, () => {
+      setJourPrecis(null)
+      if (getQuand()) setQuand(getQuand()) // re-choisir la même la relâche
+    })
+    choix('Aujourd’hui', q === 'today', () => q !== 'today' && setQuand('today'))
+    choix('Ce week-end', q === 'weekend', () => q !== 'weekend' && setQuand('weekend'))
+    choix('Cette semaine', q === 'semaine', () => q !== 'semaine' && setQuand('semaine'))
+    // Le calendrier s'ouvre DANS le geste du clic : sinon le navigateur refuse.
+    choix(j ? 'Autre date…' : 'Choisir une date…', Boolean(j), () =>
+      ouvrirCalendrier(j, (jour) => setJourPrecis(jour))
+    )
+    mapFrame.appendChild(panneau)
+    const r = pDate.getBoundingClientRect()
+    const cadre = mapFrame.getBoundingClientRect()
+    panneau.style.left = Math.max(8, Math.min(r.left - cadre.left, cadre.width - 248)) + 'px'
+    panneau.style.top = r.bottom - cadre.top + 6 + 'px'
+    pDate.setAttribute('aria-expanded', 'true')
+    menuDate = panneau
+  }
+  // Un clic ailleurs referme le menu.
+  document.addEventListener('click', (e) => {
+    if (menuDate && !menuDate.contains(e.target) && !pDate.contains(e.target)) fermerMenuDate()
+  })
+
+  // 3. Food trucks — un MODE de la carte, éteint par défaut, posé seul dans le
+  //    coin haut droit (Matthieu, 15/10/2026). Allumé, on ne voit plus que les
+  //    camions — ceux du mois à venir, ou de la période choisie — et les
+  //    événements où l'on mange sur place.
+  // ⚠ PAS MÉMORISÉ d'une ouverture à l'autre : il CACHE des événements, et une
+  //   carte presque vide au lancement passerait pour une panne.
+  let avecFoodTrucks = false
+  const pTrucks = el('button', 'map-pill map-pill--trucks map-food')
+  pTrucks.type = 'button'
+  pTrucks.append(icon('truck'), el('span', 'map-pill__texte', 'Food trucks'))
+  pTrucks.addEventListener('click', () => {
+    avecFoodTrucks = !avecFoodTrucks
+    majTrucks()
+    loadEvents()
+    loadFoodTrucks()
+  })
+  const majTrucks = () => {
+    pTrucks.classList.toggle('is-active', avecFoodTrucks)
+    pTrucks.setAttribute('aria-pressed', String(avecFoodTrucks))
+  }
+  majTrucks()
 
   // Compteur de résultats et retour de géolocalisation, posés SUR la carte
   // pour ne rien prendre à sa hauteur.
@@ -270,6 +289,7 @@ export async function viewMap() {
   const mapDiv = el('div', 'map map--studio')
   mapFrame.appendChild(mapDiv)
   mapFrame.appendChild(barre)
+  mapFrame.appendChild(pTrucks)
   mapFrame.appendChild(resultsBar)
   mapFrame.appendChild(geoMsg)
   wrap.appendChild(mapFrame)
@@ -284,19 +304,41 @@ export async function viewMap() {
   // ⚠ LA LISTE EFFECTIVE, pas le choix durable : si le panneau de filtres
   // porte une retouche temporaire, le masque de la carte doit la suivre,
   // sinon l'agenda et la carte ne montreraient pas le même territoire.
-  // (Le menu de départements PROPRE À LA CARTE, lui, écrit toujours le choix
-  //  durable — c'est un troisième endroit à consolider, voir le rapport.)
   const mesCodes = () => getDepartementsEffectifs()
   const markers = L.layerGroup()
+  const marqueursTrucks = L.layerGroup()
+
+  // Le compteur dit les deux : « 12 événements · 3 food trucks ».
+  let nbEvenements = null
+  let nbTrucks = null
+  const peindreCompteur = () => {
+    if (nbEvenements == null) return
+    // Mode Food trucks : les camions d'abord, puis les événements où l'on mange.
+    if (avecFoodTrucks) {
+      if (nbTrucks == null) return
+      const periode = libelleQuand()?.toLowerCase() ?? 'ce mois-ci'
+      let t = `${nbTrucks} food truck${nbTrucks > 1 ? 's' : ''} · ${periode}`
+      if (nbEvenements) t += ` · ${nbEvenements} événement${nbEvenements > 1 ? 's' : ''} avec food`
+      count.textContent = t
+      return
+    }
+    count.textContent = `${nbEvenements} événement${nbEvenements > 1 ? 's' : ''}`
+  }
 
   async function loadEvents() {
     if (!map) return
     count.textContent = 'Recherche…'
     try {
       let events = await eventsWithinRadius({ lat: center.lat, lng: center.lng, radiusM: RAYON_M })
-      const cat = getCategory()
-      if (cat) events = events.filter((e) => e.category === cat)
-      if (selectedDate) events = events.filter((e) => coversDay(e, selectedDate))
+      // Styles et tarif : la même fonction que l'Agenda.
+      events = appliquerFiltres(events, tarifMode)
+      // « Aujourd'hui » / « Ce week-end » du panneau, puis la date précise.
+      // ⚠ Par jours COUVERTS, pas par date de début : un festival commencé
+      // hier a bien lieu aujourd'hui (voir src/lib/recurrence.js).
+      const jours = joursDeQuand()
+      if (jours) events = events.filter((e) => eventDayKeys(e).some((k) => jours.has(k)))
+      // Mode Food trucks : seulement les événements où un camion est annoncé.
+      if (avecFoodTrucks) events = events.filter((e) => e.food_trucks?.length || e.restauration)
       if (contours) {
         // Hors territoire, ou dans un département que l'utilisateur a décoché.
         const codes = mesCodes()
@@ -313,10 +355,151 @@ export async function viewMap() {
         markers.addLayer(m)
         plotted++
       }
-      count.textContent = `${plotted} événement${plotted > 1 ? 's' : ''}`
+      nbEvenements = plotted
+      peindreCompteur()
     } catch (e) {
       count.textContent = 'Erreur : ' + e.message
     }
+  }
+
+  /**
+   * La couche des food trucks. Chargée seulement quand elle est allumée, et
+   * soumise au même territoire que les événements.
+   * Les styles et le tarif du panneau ne s'y appliquent PAS : ils décrivent des
+   * spectacles, pas des camions.
+   */
+  async function loadFoodTrucks() {
+    if (!map) return
+    marqueursTrucks.clearLayers()
+    if (!avecFoodTrucks) {
+      nbTrucks = null
+      return peindreCompteur()
+    }
+    // La période : celle choisie (Date ou Filtres), sinon LE MOIS À VENIR —
+    // comme la carte montre par défaut tous les événements à venir.
+    const jours = joursDeQuand()
+    const auj = aujourdhuiParis()
+    let debut = auj
+    let fin = dansNJours(auj, 30)
+    if (jours) {
+      const liste = [...jours].sort()
+      debut = liste[0]
+      fin = liste[liste.length - 1]
+    }
+    // Planning (0035, puis 0034 pour le seul jour même). Sans lui, repli sur
+    // l'adresse de la fiche plutôt qu'une couche vide.
+    let presences = await foodTrucksPeriode(debut, fin)
+    if (!presences && debut === auj && fin === auj) {
+      presences = (await foodTrucksAujourdhui())?.map((p) => ({ ...p, jour: auj })) ?? null
+    }
+    if (presences && jours) presences = presences.filter((p) => jours.has(p.jour))
+    let groupes = presences ? regrouper(presences) : (await foodTrucksSurCarte()).map((t) => ({ fiche: t }))
+    if (contours) {
+      const codes = mesCodes()
+      groupes = groupes.filter((g) => estDansLeTerritoire(g.fiche ?? g, contours, codes))
+    }
+    // La vue a pu être éteinte entre-temps : ne rien poser dans ce cas.
+    if (!avecFoodTrucks) return
+    for (const g of groupes) {
+      const p = g.fiche ?? g
+      // Au-dessus des gouttes : allumée exprès, la couche ne doit pas se
+      // perdre sous un amas d'événements (Forcalquier, Manosque).
+      const m = L.marker([p.lat, p.lng], { icon: MARQUEUR_FOOD_TRUCK, zIndexOffset: 1000 })
+      m.bindPopup(() => popupFoodTruck(g))
+      marqueursTrucks.addLayer(m)
+    }
+    // Un camion présent à deux endroits pose deux points, mais reste UN camion.
+    nbTrucks = new Set(groupes.map((g) => g.truck_id ?? g.fiche?.id)).size
+    peindreCompteur()
+  }
+
+  /**
+   * UN SEUL REPÈRE PAR CAMION ET PAR LIEU sur la période (Matthieu,
+   * 15/10/2026) : le lundi et le jeudi au même marché ne font pas deux points.
+   * Chaque groupe garde ses présences, résumées dans la bulle.
+   */
+  function regrouper(presences) {
+    const parCle = new Map()
+    for (const p of presences) {
+      const cle = `${p.truck_id}|${p.place_label}|${Number(p.lat).toFixed(4)},${Number(p.lng).toFixed(4)}`
+      if (!parCle.has(cle)) {
+        parCle.set(cle, {
+          truck_id: p.truck_id,
+          name: p.name,
+          cuisine: p.cuisine,
+          place_label: p.place_label,
+          lat: p.lat,
+          lng: p.lng,
+          presences: [],
+        })
+      }
+      parCle.get(cle).presences.push(p)
+    }
+    return [...parCle.values()]
+  }
+
+  /**
+   * Les jours d'un groupe, lisibles : les présences RÉGULIÈRES se résument
+   * (« Tous les lundis · 11 h 30 – 14 h »), les autres se datent
+   * (« Sam. 18 oct. · 18 h – 22 h »). Aujourd'hui est signalé.
+   */
+  function joursLisibles(presences) {
+    const auj = aujourdhuiParis()
+    const parRythme = new Map()
+    for (const p of presences) {
+      const cle = `${jourIso(p.jour)}|${p.start_time}|${p.end_time}`
+      if (!parRythme.has(cle)) parRythme.set(cle, [])
+      parRythme.get(cle).push(p)
+    }
+    const lignes = []
+    for (const groupe of parRythme.values()) {
+      groupe.sort((a, b) => a.jour.localeCompare(b.jour))
+      const p = groupe[0]
+      const heures = plageHoraire(p.start_time, p.end_time)
+      if (groupe.length >= 2) {
+        const nom = JOURS[jourIso(p.jour) - 1].toLowerCase()
+        lignes.push({ tri: p.jour, texte: `Tous les ${nom}s · ${heures}`, auj: groupe.some((x) => x.jour === auj) })
+      } else {
+        const date =
+          p.jour === auj
+            ? 'Aujourd’hui'
+            : new Date(p.jour + 'T12:00:00').toLocaleDateString('fr-FR', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+              })
+        lignes.push({ tri: p.jour, texte: `${majuscule(date)} · ${heures}`, auj: p.jour === auj })
+      }
+    }
+    return lignes.sort((a, b) => a.tri.localeCompare(b.tri))
+  }
+
+  function popupFoodTruck(g) {
+    const box = el('div', 'popup')
+    // Repli sans planning : une fiche, avec ses horaires en texte.
+    if (g.fiche) {
+      const t = g.fiche
+      box.appendChild(el('span', 'popup__cat popup__cat--truck', t.cuisine || 'Food truck'))
+      box.appendChild(el('strong', 'popup__title', t.name))
+      if (t.opening_hours) box.appendChild(el('div', 'popup__meta popup__meta--horaires', t.opening_hours))
+      if (t.address) box.appendChild(el('div', 'popup__meta', '📍 ' + t.address))
+      const open = el('button', 'btn btn--sm btn--primary', 'Voir la fiche')
+      open.addEventListener('click', () => navigate('/fiche?id=' + t.id))
+      box.appendChild(open)
+      return box
+    }
+    box.appendChild(el('span', 'popup__cat popup__cat--truck', g.cuisine || 'Food truck'))
+    box.appendChild(el('strong', 'popup__title', g.name))
+    box.appendChild(el('div', 'popup__meta', '📍 ' + g.place_label))
+    const ul = el('ul', 'popup__jours')
+    for (const l of joursLisibles(g.presences)) {
+      ul.appendChild(el('li', l.auj ? 'is-today' : null, l.texte))
+    }
+    box.appendChild(ul)
+    const open = el('button', 'btn btn--sm btn--primary', 'Voir la fiche')
+    open.addEventListener('click', () => navigate('/fiche?id=' + g.truck_id))
+    box.appendChild(open)
+    return box
   }
 
   /** Centre la carte sur la position retenue, au zoom d'ouverture. */
@@ -331,7 +514,8 @@ export async function viewMap() {
     box.appendChild(el('strong', 'popup__title', ev.title))
     box.appendChild(el('div', 'popup__meta', `${formatDate(ev.starts_at)} · ${formatTime(ev.starts_at)}`))
     box.appendChild(el('div', 'popup__meta', formatPrice(ev)))
-    if (ev.address) box.appendChild(el('div', 'popup__meta', '📍 ' + ev.address))
+    const ou = ev.city ? [ev.place_name, ev.city].filter(Boolean).join(', ') : ev.address
+    if (ou) box.appendChild(el('div', 'popup__meta', '📍 ' + ou))
     const open = el('button', 'btn btn--sm btn--primary', 'Voir le détail')
     open.addEventListener('click', () => navigate('/evenement?id=' + ev.id))
     box.appendChild(open)
@@ -383,6 +567,7 @@ export async function viewMap() {
     }).addTo(map)
 
     markers.addTo(map)
+    marqueursTrucks.addTo(map)
     userMarker = L.circleMarker([center.lat, center.lng], {
       radius: 6,
       color: '#fff',
@@ -406,8 +591,10 @@ export async function viewMap() {
     // Les événements partent SANS attendre le GPS : la requête couvre tout le
     // territoire de toute façon, la position ne sert qu'au cadrage.
     const pEvenements = loadEvents()
+    // Les camions attendent le territoire : ils sont triés par département.
+    const pCouche = pTerritoire.then(() => loadFoodTrucks())
 
-    const [, located] = await Promise.all([pTerritoire, pPosition, pEvenements])
+    const [, located] = await Promise.all([pTerritoire, pPosition, pEvenements, pCouche])
 
     // Position réelle obtenue → on complète la visite du jour avec le
     // DÉPARTEMENT (jamais la position). Le repli Forcalquier ne compte pas :
