@@ -2833,6 +2833,13 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
   /* Trois lignes, puis les points de suspension : Matthieu preferait cette
      limite, et le titre entier attend sur la fiche. */
   -webkit-line-clamp: 3;
+  /* ⚠ LES JAMBAGES DÉPASSENT DE LA LIGNE. Mesuré sur Oswald : à 1,16
+     d'interligne, la ligne s'arrête 0,14em sous la ligne de base, alors que le
+     « g » descend à 0,25em. La dernière ligne visible avait donc ses g, p, q, y
+     tranchés (« guerre », signalé par Matthieu). Ce remplissage montre les
+     0,11em manquants, sans laisser paraître la ligne suivante, dont les
+     capitales commencent 0,2em plus bas. */
+  padding-bottom: 0.12em;
 }
 /* ⚠ `margin: auto 0` des DEUX côtés : l'adresse se centre dans l'espace libre
    entre le titre et le badge de prix, au lieu d'être collée au bas. Le même
