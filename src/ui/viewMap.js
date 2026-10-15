@@ -185,7 +185,8 @@ export async function viewMap() {
     if (menuDate) return fermerMenuDate()
     ouvrirMenuDate()
   })
-  pDate.appendChild(icon('chevronDown'))
+  // Pas de flèche : les trois pastilles doivent tenir sur une ligne même à
+  // 340 px. Le menu reste annoncé aux lecteurs d'écran.
   pDate.setAttribute('aria-haspopup', 'true')
   const majDate = () => {
     const l = libelleQuand()
@@ -288,8 +289,9 @@ export async function viewMap() {
   const mapFrame = el('div', 'map-frame-studio')
   const mapDiv = el('div', 'map map--studio')
   mapFrame.appendChild(mapDiv)
+  // « Food trucks » ferme la rangée, poussé à droite (voir style.css).
+  barre.appendChild(pTrucks)
   mapFrame.appendChild(barre)
-  mapFrame.appendChild(pTrucks)
   mapFrame.appendChild(resultsBar)
   mapFrame.appendChild(geoMsg)
   wrap.appendChild(mapFrame)

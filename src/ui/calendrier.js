@@ -23,10 +23,21 @@ export function ouvrirCalendrier(valeur, onChoix) {
   champ.setAttribute('aria-label', 'Choisir une date')
   document.body.appendChild(champ)
 
-  champ.addEventListener('change', () => {
-    onChoix(champ.value || null)
+  // ⚠ « change » SEUL NE SUFFIT PAS (signalé par Matthieu, 15/10/2026 : la
+  // date choisie ne s'appliquait pas). Selon le téléphone, le calendrier natif
+  // n'envoie que « input », ou ne valide qu'à la fermeture (« blur »). On
+  // écoute les trois, et on ne retient le choix qu'UNE fois — dès qu'une date
+  // différente de celle de départ apparaît.
+  let retenu = false
+  const valider = () => {
+    if (retenu || !champ.value || champ.value === (valeur || '')) return
+    retenu = true
+    onChoix(champ.value)
     setTimeout(() => champ.remove(), 0)
-  })
+  }
+  champ.addEventListener('input', valider)
+  champ.addEventListener('change', valider)
+  champ.addEventListener('blur', valider)
 
   try {
     if (typeof champ.showPicker === 'function') champ.showPicker()

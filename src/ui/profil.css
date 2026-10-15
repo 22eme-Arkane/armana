@@ -1,0 +1,85 @@
+/* Armana — « Mon profil » : trois cartes compactes, tout centré (15/10/2026). */
+
+.page--profil { text-align: center; }
+
+.profil-carte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 1rem 1rem 1.1rem;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(6, 43, 29, 0.08);
+}
+.profil-carte__titre {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--studio-blue, #0b55c5);
+}
+.profil-aide {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--studio-ink) 70%, #fff);
+}
+.profil-msg:empty { display: none; }
+.profil-msg { margin: 0; }
+
+/* Nom affiché : lu, avec « Modifier » ; le champ ne s'ouvre qu'à la demande. */
+.profil-nom { display: flex; flex-direction: column; align-items: center; gap: 0.45rem; }
+.profil-nom[hidden],
+.profil-nom__edition[hidden] { display: none; }
+.profil-nom__valeur {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  line-height: 1.15;
+  color: var(--studio-green);
+  overflow-wrap: anywhere;
+}
+.profil-nom__edition { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+.profil-nom__edition .form__input { text-align: center; }
+.profil-boutons { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+
+/* « Vous êtes… » : trois segments sur une seule ligne. */
+.profil-segments {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--studio-cream, #fff4df);
+  border: 1px solid rgba(6, 43, 29, 0.12);
+}
+.profil-segment {
+  min-width: 0;
+  padding: 0.55rem 0.25rem;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--studio-ink);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.15;
+  cursor: pointer;
+}
+.profil-segment.is-active {
+  background: var(--studio-blue, #0b55c5);
+  color: #fff;
+  font-weight: 800;
+}
+.profil-carte .btn[hidden] { display: none; }
+
+/* Adresse de connexion : coupée proprement, jamais tronquée. */
+.profil-email {
+  margin: 0;
+  max-width: 100%;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

@@ -1241,16 +1241,27 @@ a.settings-row .settings-row__label { word-break: break-all; }
 .map-pill svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .map-pill__texte { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .map-pill.is-active { background: var(--mask-yellow); border-color: var(--mask-yellow); }
-/* « Food trucks », seul dans le coin haut droit de la carte (15/10/2026) ;
-   la barre de pastilles lui laisse la place. */
-.map-pills { right: 132px; }
-.map-pill.map-food {
-  position: absolute;
-  top: 10px;
+/* Une seule rangée : Filtres et Date à gauche, « Food trucks » poussé dans le
+   coin droit (15/10/2026).
+   ⚠ PLUS DE PLACE RÉSERVÉE EN DUR. La barre défilait dans les 132 px que lui
+   laissait « Food trucks » posé en absolu : quelques pixels de moins sur un
+   téléphone, et « Week-end » / « Semaine » se faisaient rogner à droite. Ici
+   rien ne défile ni ne se coupe ; faute de place, Food trucks passe à la
+   ligne, toujours à droite.
+   La barre laisse passer les gestes entre les pastilles : la carte reste
+   déplaçable sur toute cette bande. */
+.map-pills {
   right: 10px;
-  z-index: 402;
-  max-width: 116px;
+  flex-wrap: wrap;
+  overflow: visible;
+  pointer-events: none;
 }
+.map-pills > * { pointer-events: auto; }
+.map-pill.map-food { margin-left: auto; }
+/* Mesuré à 340 px : 77 + 91 + 111 px de pastilles pour 288 px de barre. Ces
+   marges serrées sont ce qui fait tenir les trois sur une ligne. */
+.map-pills { gap: 0.3rem; }
+.map-pills .map-pill { max-width: none; padding: 0.42rem 0.5rem; gap: 0.25rem; }
 .popup__jours { margin: 0.2rem 0 0.5rem; padding: 0; list-style: none; font-size: 0.8rem; line-height: 1.5; }
 .popup__jours li.is-today { font-weight: 800; color: var(--studio-red); }
 /* Allumée, la pastille prend la couleur de ses marqueurs : le lien se fait seul. */
