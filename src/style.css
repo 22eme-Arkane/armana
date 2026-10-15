@@ -529,19 +529,61 @@ a.settings-row .settings-row__label { word-break: break-all; }
   font-size: 0.95rem;
   color: var(--studio-ink);
 }
-/* Champ « date » invisible qui sert à ouvrir le calendrier natif (ui/calendrier.js).
-   ⚠ PAS display:none : un champ non rendu ne peut pas ouvrir son calendrier. */
-.calendrier-cache {
-  position: fixed;
-  left: 50%;
-  bottom: 50%;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  border: 0;
-  padding: 0;
-  pointer-events: none;
+/* Calendrier d'Armana (ui/calendrier.js) : une feuille, un mois, on touche un jour. */
+.feuille--calendrier { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem 0.5rem;
 }
+.cal-nav__titre {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--studio-green);
+  text-transform: capitalize;
+}
+.cal-nav__btn {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(6, 43, 29, 0.15);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--studio-green);
+  cursor: pointer;
+}
+.cal-nav__btn:disabled { opacity: 0.3; cursor: default; }
+.cal-nav__btn svg { width: 20px; height: 20px; }
+.cal-grille {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.3rem;
+  padding: 0 1rem;
+}
+.cal-grille__entete {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--studio-ink) 55%, #fff);
+}
+.cal-grille__jour {
+  /* Hauteur FIXE, pas carrée : sur un écran large, des cases carrées
+     poussaient la feuille hors de l'écran. */
+  height: 2.6rem;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--studio-ink);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cal-grille__jour:disabled { color: rgba(6, 43, 29, 0.25); cursor: default; }
+.cal-grille__jour.is-today { color: var(--studio-blue, #0b55c5); box-shadow: inset 0 0 0 2px var(--studio-blue, #0b55c5); }
+.cal-grille__jour.is-active { background: var(--mask-yellow); color: var(--studio-ink); }
 .lieu-commune__label { display: block; margin-top: 0.8rem; }
 .feuille__aide {
   margin: 0 0 0.5rem;
