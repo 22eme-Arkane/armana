@@ -60,6 +60,32 @@ function ressembleAduHeic(file) {
   return type.includes('heic') || type.includes('heif') || EXT_HEIC.test(file?.name || '')
 }
 
+/**
+ * Une COPIE en mémoire du fichier choisi, faite tout de suite.
+ *
+ * ⚠ SUR ANDROID, UNE PHOTO CHOISIE N'EST LISIBLE QUE TANT QUE LE SÉLECTEUR LA
+ * TIENT. Le fichier renvoyé pointe vers la galerie du téléphone ; une fois le
+ * champ vidé (la galerie d'une fiche le vidait aussitôt) ou après un long
+ * moment, le relire échoue. L'aperçu passait, puis l'envoi, fait bien plus
+ * tard à l'enregistrement, tombait sur « Image illisible » — signalé par un
+ * food truck le 16/10/2026, sur plusieurs photos. Copier les octets dès le
+ * choix rend la photo indépendante du sélecteur.
+ */
+async function copieEnMemoire(file) {
+  try {
+    const octets = await file.arrayBuffer()
+    return new File([octets], file.name || 'photo', {
+      type: file.type || '',
+      lastModified: file.lastModified || Date.now(),
+    })
+  } catch {
+    throw new Error(
+      'le téléphone n’a pas donné accès à cette photo. Réessayez, ou choisissez-la ' +
+        'depuis « Fichiers » plutôt que depuis la galerie.'
+    )
+  }
+}
+
 /** Aucune promesse ne doit pouvoir rester en suspens pour toujours. */
 function avecDelai(promesse, ms) {
   let minuteur
@@ -122,6 +148,7 @@ async function viaBibliotheque(file) {
  */
 export async function toDisplayableFile(file, onProgres) {
   if (!file) return file
+  file = await copieEnMemoire(file)
   if (await lisibleParLeNavigateur(file)) return file
 
   if (!ressembleAduHeic(file)) {

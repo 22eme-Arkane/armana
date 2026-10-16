@@ -270,20 +270,36 @@ export async function viewFicheEdit() {
           champs.lat = null
         }
       }
+      // Chaque envoi dit QUELLE photo a échoué : « Image illisible » tout court
+      // laissait chercher parmi trois photos et une galerie.
+      const envoyer = async (quoi, action) => {
+        try {
+          return await action()
+        } catch (e) {
+          throw new Error(`${quoi} n’a pas pu être envoyée (${e.message}). Choisissez-la à nouveau.`)
+        }
+      }
       if (nouvellePhoto) {
         msg.textContent = 'Envoi de la photo…'
-        champs.photo_path = await envoyerPhotoFiche(nouvellePhoto, 'photo', fiche?.photo_path)
+        champs.photo_path = await envoyer('la photo principale', () =>
+          envoyerPhotoFiche(nouvellePhoto, 'photo', fiche?.photo_path)
+        )
       }
       if (nouveauProduit) {
-        msg.textContent = 'Envoi de la photo de produit…'
-        champs.product_photo_path = await envoyerPhotoFiche(nouveauProduit, 'produit', fiche?.product_photo_path)
+        msg.textContent = 'Envoi de la photo du menu…'
+        champs.product_photo_path = await envoyer('la photo du menu', () =>
+          envoyerPhotoFiche(nouveauProduit, 'produit', fiche?.product_photo_path)
+        )
       }
       // La galerie n'est envoyée que si elle a changé : sans la migration 0034,
       // la colonne n'existe pas et l'enregistrement entier échouerait.
       const retirees = galerie.retirees()
       if (galerie.aChange()) {
         msg.textContent = 'Envoi des photos…'
-        champs.gallery_paths = [...galerie.gardees(), ...(await envoyerGalerie(galerie.nouvelles()))]
+        champs.gallery_paths = [
+          ...galerie.gardees(),
+          ...(await envoyer('une photo de la galerie', () => envoyerGalerie(galerie.nouvelles()))),
+        ]
       }
       const premiere = !fiche
       fiche = await enregistrerFiche(champs)
@@ -409,20 +425,27 @@ function galerieEditeur(fiche, titre) {
   input.addEventListener('change', async () => {
     const place = GALERIE_MAX - gardees.length - nouvelles.length
     const fichiers = [...(input.files ?? [])].slice(0, place)
-    input.value = ''
+    // ⚠ Le champ n'est vidé qu'APRÈS la copie des photos (voir copieEnMemoire,
+    // lib/heic.js) : vidé avant, Android retirait l'accès aux fichiers et
+    // l'envoi échouait sur « Image illisible ».
+    let erreur = null
     for (const brut of fichiers) {
       aide.textContent = 'Préparation de la photo…'
       try {
         const f = await toDisplayableFile(brut, (etape) => (aide.textContent = etape))
         nouvelles.push({ file: f, url: URL.createObjectURL(f) })
       } catch (err) {
-        aide.textContent = 'Photo illisible : ' + err.message
-        continue
+        erreur = err
       }
     }
-    aide.textContent = nouvelles.length
-      ? 'Elles seront envoyées à l’enregistrement.'
-      : 'Elles s’affichent dans « En photo » sur votre fiche.'
+    input.value = ''
+    // ⚠ Un échec reste AFFICHÉ : il était aussitôt écrasé par le message
+    // ordinaire, et l'on ne comprenait pas pourquoi une photo manquait.
+    aide.textContent = erreur
+      ? 'Photo illisible : ' + erreur.message
+      : nouvelles.length
+        ? 'Elles seront envoyées à l’enregistrement.'
+        : 'Elles s’affichent dans « En photo » sur votre fiche.'
     peindre()
   })
 
