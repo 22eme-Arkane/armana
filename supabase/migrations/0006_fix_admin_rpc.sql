@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rézo 04 Culture — Migration 0006 : correctif « column reference id is ambiguous »
+-- Armana — Migration 0006 : correctif « column reference id is ambiguous »
 -- =============================================================================
 -- Dans set_admin_by_email (0003), les colonnes de sortie (id, display_name, role)
 -- entrent en conflit avec les colonnes de la table dans ON CONFLICT (id) →

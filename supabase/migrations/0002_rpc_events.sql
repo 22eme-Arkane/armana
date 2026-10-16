@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rézo 04 Culture — Migration 0002 : RPC de création / mise à jour d'événements
+-- Armana — Migration 0002 : RPC de création / mise à jour d'événements
 -- =============================================================================
 -- PostgREST ne sait pas insérer proprement une colonne geography depuis le client.
 -- On passe donc par deux fonctions SECURITY INVOKER : la RLS de la table events

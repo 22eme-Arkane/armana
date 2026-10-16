@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rézo 04 Culture — Migration 0003 : gestion des administrateurs par e-mail
+-- Armana — Migration 0003 : gestion des administrateurs par e-mail
 -- =============================================================================
 -- Un admin peut désigner / retirer d'autres admins par e-mail. Les e-mails vivent
 -- dans auth.users (privés) → on passe par des fonctions SECURITY DEFINER qui :

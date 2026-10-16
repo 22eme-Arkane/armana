@@ -1,7 +1,7 @@
 -- =============================================================================
--- Rézo 04 Culture — Migration initiale (schéma + PostGIS + RLS)
+-- Armana — Migration initiale (schéma + PostGIS + RLS)
 -- =============================================================================
--- À appliquer sur le projet Supabase DÉDIÉ à Rézo (jamais partagé).
+-- À appliquer sur le projet Supabase DÉDIÉ à Armana (jamais partagé).
 -- Principe directeur : ZÉRO confiance côté client. Toute autorisation est
 -- imposée par les politiques RLS ci-dessous. La clé "anon" est publique.
 -- =============================================================================

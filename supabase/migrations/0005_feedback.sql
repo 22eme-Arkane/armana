@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rézo 04 Culture — Migration 0005 : messages « Nous contacter » (bug / avis)
+-- Armana — Migration 0005 : messages « Nous contacter » (bug / avis)
 -- =============================================================================
 -- Les utilisateurs connectés envoient un message (signalement de bug ou avis) ;
 -- seuls les admins peuvent les lire et les supprimer (boîte dans l'app).

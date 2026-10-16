@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rézo 04 Culture — Migration 0007 : corrections Security Advisor Supabase
+-- Armana — Migration 0007 : corrections Security Advisor Supabase
 -- =============================================================================
 -- Réponse aux alertes du scan hebdomadaire (« security vulnerabilities detected ») :
 --

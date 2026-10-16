@@ -18,7 +18,7 @@ export default defineConfig({
   },
   plugins: [
     {
-      name: 'rezo-emit-version',
+      name: 'armana-emit-version',
       generateBundle() {
         this.emitFile({
           type: 'asset',

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rézo 04 Culture — Migration 0004 : correctif du garde-fou de rôle
+-- Armana — Migration 0004 : correctif du garde-fou de rôle
 -- =============================================================================
 -- Le trigger anti-escalade (0001) bloquait TOUT changement de rôle quand
 -- l'appelant n'est pas admin — y compris depuis le SQL Editor (aucun utilisateur

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rézo 04 Culture — Migration 0008 : durcissement suite au Security Advisor
+-- Armana — Migration 0008 : durcissement suite au Security Advisor
 -- =============================================================================
 -- Réponses aux 19 warnings + 1 erreur du linter Supabase (captures 2026-07-14) :
 --
