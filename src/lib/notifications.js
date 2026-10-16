@@ -34,6 +34,17 @@ export const TYPES = [
     detail: 'Quand un événement est publié dans l’agenda.',
     adminSeulement: false,
   },
+  {
+    // Migration 0036 : notifications PERSONNELLES des food trucks. ⚠ La clé
+    // enregistrée est un REFUS (« food_truck_off ») : le camion est prévenu
+    // par défaut, l'interrupteur affiche donc l'inverse de la clé.
+    cle: 'food_truck_off',
+    inverse: true,
+    titre: 'Mon food truck',
+    detail: 'Rappel de confirmer votre planning, signalements « pas là », annonces sur un événement.',
+    adminSeulement: false,
+    foodTruckSeulement: true,
+  },
 ]
 
 // --- Capacités de l'appareil -------------------------------------------------

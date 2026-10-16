@@ -45,6 +45,11 @@ export function plageHoraire(debut, fin) {
   return `${heure(debut)} – ${heure(fin)}`
 }
 
+/** « Forcalquier · Parking Gamm Vert » : la commune, puis le repère s'il y en a un. */
+export function lieuLisible(p) {
+  return [p.place_label, p.place_hint].filter(Boolean).join(' · ')
+}
+
 /** « 2026-10-17 » → « samedi 17 octobre ». */
 export function dateLongue(ymd) {
   return new Date(ymd + 'T12:00:00').toLocaleDateString('fr-FR', {
@@ -103,7 +108,7 @@ export async function confirmerPlanning() {
 export async function listerCreneaux(truckId) {
   const { data, error } = await supabase
     .from('food_truck_slots')
-    .select('id, truck_id, weekday, start_time, end_time, location, place_label, valid_from, valid_until')
+    .select('id, truck_id, weekday, start_time, end_time, location, place_label, place_hint, valid_from, valid_until')
     .eq('truck_id', truckId)
     .order('weekday')
     .order('start_time')
@@ -120,6 +125,7 @@ export async function enregistrerCreneau(c) {
     end_time: c.end_time,
     location: ecrirePoint(c.lat, c.lng),
     place_label: c.place_label.trim(),
+    place_hint: c.place_hint?.trim() || null,
     valid_from: c.valid_from || null,
     valid_until: c.valid_until || null,
   }
@@ -140,7 +146,7 @@ export async function listerExceptions(truckId) {
   const { data, error } = await supabase
     .from('food_truck_exceptions')
     .select(
-      'id, truck_id, slot_id, kind, date_start, date_end, start_time, end_time, location, place_label, event_id, events(title)'
+      'id, truck_id, slot_id, kind, date_start, date_end, start_time, end_time, location, place_label, place_hint, event_id, events(title)'
     )
     .eq('truck_id', truckId)
     .gte('date_end', aujourdhuiParis())
@@ -165,6 +171,7 @@ export async function ajouterException(e) {
     end_time: e.end_time || null,
     location: Number.isFinite(e.lat) && Number.isFinite(e.lng) ? ecrirePoint(e.lat, e.lng) : null,
     place_label: e.place_label?.trim() || null,
+    place_hint: e.place_hint?.trim() || null,
     event_id: e.event_id || null,
   }
   const { error } = await supabase.from('food_truck_exceptions').insert(ligne)

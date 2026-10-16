@@ -11,10 +11,12 @@ import { el } from './components.js'
 import { rechercheCommune } from './rechercheCommune.js'
 
 /**
- * @param {{lat?:number, lng?:number, label?:string}} depart  lieu déjà connu
- * @returns {{wrap:HTMLElement, valeur:()=>({lat:number,lng:number,label:string}|null)}}
+ * @param {{lat?:number, lng?:number, label?:string, hint?:string}} depart  lieu déjà connu
+ * @param {{avecRepere?:boolean}} opts  `avecRepere` : champ « Repère ou hôte »
+ *        (migration 0036) — « Parking Gamm Vert », « Place du marché ».
+ * @returns {{wrap:HTMLElement, valeur:()=>({lat:number,lng:number,label:string,hint:string}|null)}}
  */
-export function choixLieu(depart = {}) {
+export function choixLieu(depart = {}, { avecRepere = false } = {}) {
   const wrap = el('div', 'form__field choix-lieu')
   wrap.appendChild(el('span', 'form__label', 'Commune *'))
 
@@ -33,6 +35,19 @@ export function choixLieu(depart = {}) {
     },
   })
   wrap.append(commune.wrap, cadre, aide)
+
+  // Repère ou hôte : COURT (40 signes) et facultatif. La commune, elle, reste
+  // choisie dans la liste — c'est elle qui situe le camion.
+  let repere = null
+  if (avecRepere) {
+    wrap.appendChild(el('span', 'form__label choix-lieu__repere-label', 'Repère ou hôte (facultatif)'))
+    repere = el('input', 'form__input')
+    repere.type = 'text'
+    repere.maxLength = 40
+    repere.placeholder = 'Parking Gamm Vert, place du marché…'
+    repere.value = depart.hint || ''
+    wrap.appendChild(repere)
+  }
 
   function peindre() {
     const c = commune.valeur()
@@ -86,7 +101,7 @@ export function choixLieu(depart = {}) {
     wrap,
     valeur: () => {
       const c = commune.valeur()
-      return c && point ? { ...point, label: c.nom } : null
+      return c && point ? { ...point, label: c.nom, hint: repere?.value.trim() || '' } : null
     },
   }
 }

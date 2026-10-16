@@ -164,6 +164,7 @@
   cursor: pointer;
 }
 .choix-lieu__option span { font-size: 0.8rem; opacity: 0.7; white-space: nowrap; }
+.choix-lieu__repere-label { display: block; margin-top: 0.6rem; }
 .choix-lieu__carte {
   height: 190px;
   margin-top: 0.4rem;
@@ -196,6 +197,10 @@
 .fiche-aujourdhui__ligne { margin: 0; font-weight: 700; }
 .fiche-pas-la { font-size: 0.85rem; }
 .fiche-aujourdhui a.btn { text-decoration: none; }
+
+/* --- Modération : qui a publié -------------------------------------------------------- */
+.moderation-auteur { font-size: 0.8rem; font-weight: 700; color: var(--studio-blue, #0b55c5); }
+.fb-tag.moderation-auteur { font-size: inherit; }
 
 /* --- Modération : résumé des food trucks -------------------------------------------- */
 .moderation-trucks summary { cursor: pointer; }

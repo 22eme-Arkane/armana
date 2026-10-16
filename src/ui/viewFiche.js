@@ -20,6 +20,7 @@ import {
   dateLongue,
   foodTrucksAujourdhui,
   jourIso,
+  lieuLisible,
   plageHoraire,
   planningPublic,
   signalerAbsence,
@@ -230,7 +231,7 @@ function blocAujourdhui(presences, f) {
   const moi = getUser()?.id === f.owner_id
   for (const p of presences) {
     box.appendChild(
-      el('p', 'fiche-aujourdhui__ligne', `${plageHoraire(p.start_time, p.end_time)} · ${p.place_label}`)
+      el('p', 'fiche-aujourdhui__ligne', `${plageHoraire(p.start_time, p.end_time)} · ${lieuLisible(p)}`)
     )
     // L'itinéraire vers l'emplacement DU JOUR, pas vers la commune de base.
     if (Number.isFinite(p.lat)) {
@@ -274,7 +275,7 @@ function blocSemaine(planning) {
       el('span', 'fiche-planning__nom' + (jourIso(auj) === j ? ' is-today' : ''), JOURS[j - 1])
     )
     const liste = el('div', 'fiche-planning__creneaux')
-    for (const c of du) liste.appendChild(el('span', null, `${plageHoraire(c.start_time, c.end_time)} · ${c.place_label}`))
+    for (const c of du) liste.appendChild(el('span', null, `${plageHoraire(c.start_time, c.end_time)} · ${lieuLisible(c)}`))
     ligne.appendChild(liste)
     box.appendChild(ligne)
   }

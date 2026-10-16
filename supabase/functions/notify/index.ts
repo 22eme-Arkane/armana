@@ -63,7 +63,10 @@ const PUSH_KEY = Deno.env.get('ARMANA_PUSH_KEY') ?? ''
 //   moderation           → le propriétaire, et les modérateurs dont la zone
 //                          couvre le département de l'événement — un modérateur
 //                          du 04 ne reçoit pas les événements du 84 ;
-//   nouveaux_evenements  → tout abonné qui l'a demandé.
+//   nouveaux_evenements  → tout abonné qui l'a demandé ;
+//   food_truck           → (migration 0036) PERSONNELLE : le seul `user_id`
+//                          de la ligne, sauf s'il a refusé (`food_truck_off`).
+//                          Rappel de planning, signalements, annonces.
 
 // Au-delà, l'abonnement est considéré mort et supprimé.
 const ECHECS_MAX = 5
@@ -94,7 +97,7 @@ Deno.serve(async (req) => {
 
   const { data: file, error: erFile } = await db
     .from('notification_queue')
-    .select('id, kind, title, body, url, dept')
+    .select('id, kind, title, body, url, dept, user_id')
     .is('sent_at', null)
     .order('created_at', { ascending: true })
     .limit(LOT)
@@ -104,7 +107,7 @@ Deno.serve(async (req) => {
   // Un seul chargement des abonnés pour tout le lot.
   const { data: abonnes, error: erAb } = await db
     .from('push_subscriptions')
-    .select('endpoint, p256dh, auth, failures, profiles!inner(role, notif_prefs, is_owner, mod_depts)')
+    .select('endpoint, p256dh, auth, failures, user_id, profiles!inner(role, notif_prefs, is_owner, mod_depts)')
   if (erAb) return json({ erreur: erAb.message }, 500)
 
   let envois = 0
@@ -113,7 +116,15 @@ Deno.serve(async (req) => {
   for (const notif of file) {
     const cibles = (abonnes ?? []).filter((a: any) => {
       const p = a.profiles
-      if (!p || p.notif_prefs?.[notif.kind] !== true) return false
+      if (!p) return false
+      // ⚠ PERSONNELLE : uniquement son destinataire, JAMAIS les autres. Un
+      // camion ne doit pas recevoir le rappel ou les signalements d'un autre.
+      if (notif.user_id) {
+        if (a.user_id !== notif.user_id) return false
+        // Prévenu par défaut ; « food_truck_off » est un refus explicite.
+        return notif.kind !== 'food_truck' || p.notif_prefs?.food_truck_off !== true
+      }
+      if (p.notif_prefs?.[notif.kind] !== true) return false
       if (notif.kind === 'messages') return p.is_owner === true
       if (notif.kind === 'moderation') {
         if (p.is_owner) return true

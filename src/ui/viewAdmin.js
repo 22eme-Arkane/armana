@@ -104,8 +104,11 @@ export async function viewAdmin() {
     approve.addEventListener('click', () => moderate(() => setEventStatus(ev.id, 'approved')))
     reject.addEventListener('click', () => moderate(() => setEventStatus(ev.id, 'rejected')))
 
+    // Qui a publié : le modérateur doit le savoir avant d'approuver (Matthieu,
+    // 16/10/2026).
+    const auteur = el('span', 'fb-tag moderation-auteur', 'Par ' + (ev.author_name || 'un membre'))
     const card = posterEventCard(ev, { showGem: false, index: events.indexOf(ev) })
-    item = studioEventItem(card, [dept, approve, reject], { status: ev.status })
+    item = studioEventItem(card, [auteur, dept, approve, reject], { status: ev.status })
     list.appendChild(item)
   }
   return wrap
@@ -188,6 +191,7 @@ async function sectionFiches(wrap, zone) {
     const corps = el('div', 'moderation-fiche__corps')
     corps.appendChild(el('span', 'moderation-fiche__type', LIBELLE_FICHE[f.kind]))
     corps.appendChild(el('strong', 'moderation-fiche__nom', f.name))
+    corps.appendChild(el('span', 'moderation-auteur', 'Par ' + (f.proprietaire?.display_name || 'un membre')))
     if (f.description) corps.appendChild(el('p', 'moderation-fiche__texte', f.description.slice(0, 160) + (f.description.length > 160 ? '…' : '')))
     const boutons = el('div', 'moderation-fiche__boutons')
     const voir = el('a', 'btn btn--ghost btn--sm', 'Voir')

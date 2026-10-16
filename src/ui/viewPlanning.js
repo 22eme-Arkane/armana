@@ -13,12 +13,14 @@ import { choixLieu } from './choixLieu.js'
 import { navigate } from '../lib/router.js'
 import { isLoggedIn } from '../lib/auth.js'
 import { getMaFiche } from '../lib/fiches.js'
+import { deviceState } from '../lib/notifications.js'
 import { villeDeLAdresse } from '../lib/adresse.js'
 import { listApprovedEvents } from '../lib/events.js'
 import { eventDayKeys } from '../lib/recurrence.js'
 import {
   JOURS,
   JOURS_COURTS,
+  lieuLisible,
   ajouterException,
   heure,
   aujourdhuiParis,
@@ -128,6 +130,7 @@ export async function viewPlanning() {
 
   function peindre() {
     corps.innerHTML = ''
+    if (notifsAProposer) corps.appendChild(blocNotifs())
     corps.appendChild(blocEtat())
     const s = blocSignalements()
     if (s) corps.appendChild(s)
@@ -179,6 +182,33 @@ export async function viewPlanning() {
     }
     s.appendChild(liste)
     return s
+  }
+
+  // --- 0. Être prévenu sur ce téléphone (migration 0036) ------------------------
+  // Les rappels et les signalements arrivent en notification — le canal choisi
+  // à la place des SMS, payants. Encore faut-il que CE téléphone les reçoive :
+  // tant que ce n'est pas le cas, on le propose en tête.
+  let notifsAProposer = false
+  try {
+    const etat = await deviceState()
+    notifsAProposer = etat === 'off' || etat === 'ios-not-installed'
+  } catch {
+    /* sans effet : on ne propose rien */
+  }
+  function blocNotifs() {
+    const b = el('section', 'planning-etat planning-etat--rappel')
+    b.appendChild(
+      el(
+        'p',
+        'planning-etat__texte',
+        'Recevez sur ce téléphone le rappel de confirmer votre planning, et les signalements « pas là ».'
+      )
+    )
+    const go = el('button', 'btn btn--primary btn--block', 'Activer les notifications')
+    go.type = 'button'
+    go.addEventListener('click', () => navigate('/notifications'))
+    b.appendChild(go)
+    return b
   }
 
   // --- 1. État et confirmation --------------------------------------------------
@@ -312,7 +342,7 @@ export async function viewPlanning() {
         )
       )
       b.appendChild(
-        el('span', null, plageHoraire(o.creneau.start_time, o.creneau.end_time) + ' · ' + o.creneau.place_label)
+        el('span', null, plageHoraire(o.creneau.start_time, o.creneau.end_time) + ' · ' + lieuLisible(o.creneau))
       )
       b.addEventListener('click', () => {
         actif?.classList.remove('is-active')
@@ -394,7 +424,7 @@ export async function viewPlanning() {
       })
     )
     suite.appendChild(el('p', 'form__hint', '2. Le nouveau lieu, et l’horaire s’il change'))
-    const lieu = choixLieu({ invite: 'Nouveau lieu' })
+    const lieu = choixLieu({}, { avecRepere: true })
     suite.appendChild(lieu.wrap)
     const debut = champHeure('Début', '')
     const fin = champHeure('Fin', '')
@@ -424,6 +454,7 @@ export async function viewPlanning() {
           lat: l.lat,
           lng: l.lng,
           place_label: l.label,
+          place_hint: l.hint,
         })
       )
     })
@@ -452,7 +483,7 @@ export async function viewPlanning() {
     p.appendChild(evChamp)
 
     const lieuHote = el('div')
-    let lieu = choixLieu()
+    let lieu = choixLieu({}, { avecRepere: true })
     lieuHote.appendChild(lieu.wrap)
     p.appendChild(lieuHote)
 
@@ -476,12 +507,19 @@ export async function viewPlanning() {
     select.addEventListener('change', () => {
       const ev = evenements.find((e) => e.id === select.value)
       lieuHote.innerHTML = ''
-      // La commune de l'événement, et son point exact : rien à ressaisir.
-      const ville = ev?.address ? villeDeLAdresse(ev.address) : ''
+      // La commune de l'événement, son point exact, et son lieu en repère :
+      // rien à ressaisir.
+      const ville = ev?.ville || (ev?.address ? villeDeLAdresse(ev.address) : '')
       lieu = choixLieu(
         ev && ev.lat != null && ville
-          ? { lat: Number(ev.lat), lng: Number(ev.lng), label: ville.slice(0, 120) }
-          : {}
+          ? {
+              lat: Number(ev.lat),
+              lng: Number(ev.lng),
+              label: ville.slice(0, 120),
+              hint: (ev.place_name || '').slice(0, 40),
+            }
+          : {},
+        { avecRepere: true }
       )
       lieuHote.appendChild(lieu.wrap)
     })
@@ -505,6 +543,7 @@ export async function viewPlanning() {
           lat: l.lat,
           lng: l.lng,
           place_label: l.label,
+          place_hint: l.hint,
           event_id: select.value || null,
         })
       )
@@ -551,7 +590,7 @@ export async function viewPlanning() {
     const l = el('div', 'planning-creneau')
     const texte = el('div', 'planning-creneau__texte')
     texte.appendChild(el('strong', null, plageHoraire(c.start_time, c.end_time)))
-    texte.appendChild(el('span', null, c.place_label))
+    texte.appendChild(el('span', null, lieuLisible(c)))
     if (c.valid_from || c.valid_until) {
       texte.appendChild(el('small', null, saison(c)))
     }
@@ -607,7 +646,7 @@ export async function viewPlanning() {
     f.appendChild(ligne)
     f.appendChild(el('p', 'form__hint', 'Une fin avant le début = le créneau passe minuit (22 h – 2 h).'))
 
-    const lieu = choixLieu(c ? { lat: c.lat, lng: c.lng, label: c.place_label } : {})
+    const lieu = choixLieu(c ? { lat: c.lat, lng: c.lng, label: c.place_label, hint: c.place_hint } : {}, { avecRepere: true })
     f.appendChild(lieu.wrap)
 
     // Saisonnalité, repliée : rares sont ceux qui en ont besoin.
@@ -649,6 +688,7 @@ export async function viewPlanning() {
             lat: l.lat,
             lng: l.lng,
             place_label: l.label,
+            place_hint: l.hint,
             valid_from: de.input.value,
             valid_until: jusqu.input.value,
           })
@@ -707,8 +747,8 @@ export async function viewPlanning() {
     const morceaux = []
     if (e.start_time) morceaux.push(plageHoraire(e.start_time, e.end_time))
     else if (creneau && e.kind !== 'extra') morceaux.push(plageHoraire(creneau.start_time, creneau.end_time))
-    if (e.place_label) morceaux.push(e.place_label)
-    else if (creneau) morceaux.push(creneau.place_label)
+    if (e.place_label) morceaux.push(lieuLisible(e))
+    else if (creneau) morceaux.push(lieuLisible(creneau))
     if (e.events?.title) morceaux.push('sur « ' + e.events.title + ' »')
     return morceaux.join(' · ')
   }

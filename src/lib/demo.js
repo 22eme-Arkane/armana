@@ -62,7 +62,7 @@ function image(fond, texte) {
 const LIEUX = {
   dauphin: { place_label: 'Dauphin', lat: 43.8947, lng: 5.7765 },
   orgues: { place_label: 'Saint-Étienne-les-Orgues', lat: 44.0648, lng: 5.7798 },
-  forcalquier: { place_label: 'Forcalquier', lat: 43.9582, lng: 5.7842 },
+  forcalquier: { place_label: 'Forcalquier', place_hint: 'Parking Gamm Vert', lat: 43.9582, lng: 5.7842 },
   manosque: { place_label: 'Manosque', lat: 43.8293, lng: 5.7896 },
   sisteron: { place_label: 'Sisteron', lat: 44.1993, lng: 5.9276 },
   mane: { place_label: 'Mane', lat: 43.9426, lng: 5.7419 },
@@ -200,6 +200,7 @@ function presence(c, s, i) {
     start_time: s.start_time,
     end_time: s.end_time,
     place_label: s.place_label,
+    place_hint: s.place_hint ?? null,
     lat: s.lat,
     lng: s.lng,
     event_id: null,

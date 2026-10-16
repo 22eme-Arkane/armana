@@ -223,7 +223,9 @@ export async function retirerPhotoProduit(fiche) {
 export async function listFichesEnAttente() {
   const { data, error } = await supabase
     .from('fiches')
-    .select(COLONNES_BASE)
+    // Le nom de la personne qui a créé la fiche, pour le modérateur (Matthieu,
+    // 16/10/2026) : savoir QUI demande la publication.
+    .select(COLONNES_BASE + ', proprietaire:profiles(display_name)')
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
     .limit(100)

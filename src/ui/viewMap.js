@@ -32,6 +32,7 @@ import {
   foodTrucksAujourdhui,
   foodTrucksPeriode,
   jourIso,
+  lieuLisible,
   plageHoraire,
 } from '../lib/foodTrucks.js'
 import { ouvrirCalendrier } from './calendrier.js'
@@ -423,13 +424,14 @@ export async function viewMap() {
   function regrouper(presences) {
     const parCle = new Map()
     for (const p of presences) {
-      const cle = `${p.truck_id}|${p.place_label}|${Number(p.lat).toFixed(4)},${Number(p.lng).toFixed(4)}`
+      const cle = `${p.truck_id}|${p.place_label}|${p.place_hint ?? ''}|${Number(p.lat).toFixed(4)},${Number(p.lng).toFixed(4)}`
       if (!parCle.has(cle)) {
         parCle.set(cle, {
           truck_id: p.truck_id,
           name: p.name,
           cuisine: p.cuisine,
           place_label: p.place_label,
+          place_hint: p.place_hint,
           lat: p.lat,
           lng: p.lng,
           presences: [],
@@ -492,7 +494,7 @@ export async function viewMap() {
     }
     box.appendChild(el('span', 'popup__cat popup__cat--truck', g.cuisine || 'Food truck'))
     box.appendChild(el('strong', 'popup__title', g.name))
-    box.appendChild(el('div', 'popup__meta', '📍 ' + g.place_label))
+    box.appendChild(el('div', 'popup__meta', '📍 ' + lieuLisible(g)))
     const ul = el('ul', 'popup__jours')
     for (const l of joursLisibles(g.presences)) {
       ul.appendChild(el('li', l.auj ? 'is-today' : null, l.texte))

@@ -9,7 +9,7 @@ import { el, emptyState, loginPrompt, toggleRow } from './components.js'
 import { studioHeader } from './studio.js'
 import { illustrationNotifications } from './illustrations.js'
 import { navigate, refresh } from '../lib/router.js'
-import { isAdmin, isLoggedIn } from '../lib/auth.js'
+import { getProfile, isAdmin, isLoggedIn } from '../lib/auth.js'
 import { amIOwner } from '../lib/admins.js'
 import {
   TYPES,
@@ -119,20 +119,26 @@ export async function viewNotifications() {
   const owner = admin && (await amIOwner().catch(() => false))
   // Un réglage qui ne produira jamais rien n'a pas à être proposé : le type
   // « messages » n'est routé qu'au propriétaire par la fonction d'envoi.
+  // Les réglages des food trucks ne concernent que leurs comptes.
+  const camion = getProfile()?.account_type === 'food_truck'
   const visibles = TYPES.filter(
-    (t) => (!t.adminSeulement || admin) && (!t.proprietaireSeulement || owner)
+    (t) =>
+      (!t.adminSeulement || admin) &&
+      (!t.proprietaireSeulement || owner) &&
+      (!t.foodTruckSeulement || camion)
   )
 
   for (const t of visibles) {
     groupe.appendChild(
       toggleRow(t.titre, {
         detail: t.detail,
-        actif: prefs[t.cle] === true,
+        // `inverse` : la clé est un refus, l'interrupteur montre l'accord.
+        actif: t.inverse ? prefs[t.cle] !== true : prefs[t.cle] === true,
         onChange: async (veut) => {
           const avant = { ...prefs }
           message.textContent = 'Enregistrement…'
           try {
-            prefs = await setPrefs({ ...prefs, [t.cle]: veut })
+            prefs = await setPrefs({ ...prefs, [t.cle]: t.inverse ? !veut : veut })
             message.textContent = 'Réglages enregistrés.'
             setTimeout(() => (message.textContent = ''), 2500)
           } catch (e) {
