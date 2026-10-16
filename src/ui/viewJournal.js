@@ -17,8 +17,9 @@ const QUAND = new Intl.DateTimeFormat('fr-FR', {
 
 const STATUTS = { approved: 'approuvé', rejected: 'rejeté', pending: 'remis en attente' }
 
-/** Une ligne de journal → une phrase française lisible. */
-function raconter(a) {
+/** Une ligne de journal → une phrase française lisible. Réutilisée par
+ *  l'écran Modérateurs (ses dernières actions). */
+export function raconter(a) {
   const qui = a.actor_name || '(compte supprimé)'
   const quoi = a.target_label || '(sans nom)'
   const d = a.details || {}
@@ -26,8 +27,8 @@ function raconter(a) {
   switch (a.action) {
     case 'role_change':
       return d.apres === 'admin'
-        ? `${qui} a nommé ${quoi} administrateur.`
-        : `${qui} a retiré le rôle d’administrateur à ${quoi}.`
+        ? `${qui} a nommé ${quoi} modérateur.`
+        : `${qui} a retiré le rôle de modérateur à ${quoi}.`
     case 'supporter':
       return d.ajoute
         ? `${qui} a ajouté ${quoi} au mur des soutiens.`
@@ -36,19 +37,25 @@ function raconter(a) {
       return `${qui} a ${STATUTS[d.apres] || 'modifié le statut de'} l’événement « ${quoi} ».`
     case 'event_delete':
       return `${qui} a supprimé l’événement « ${quoi} ».`
+    case 'member_delete':
+      return `${qui} a supprimé le compte de ${quoi}.`
     default:
       return `${qui} — ${a.action} — ${quoi}`
   }
 }
 
 /** Actions lourdes de conséquences : mises en évidence. */
-function estSensible(a) {
-  return a.action === 'event_delete' || (a.action === 'role_change' && a.details?.apres !== 'admin')
+export function estSensible(a) {
+  return (
+    a.action === 'event_delete' ||
+    a.action === 'member_delete' ||
+    (a.action === 'role_change' && a.details?.apres !== 'admin')
+  )
 }
 
 export async function viewJournal() {
   const wrap = el('section', 'page page--studio-sub')
-  wrap.appendChild(studioHeader('Journal', { backTo: '/admins', backLabel: 'Administrateurs' }))
+  wrap.appendChild(studioHeader('Journal', { backTo: '/admins', backLabel: 'Modérateurs' }))
 
   if (!isLoggedIn() || !(await amIOwner())) {
     wrap.appendChild(emptyState('Réservé au propriétaire du projet.'))
@@ -59,8 +66,8 @@ export async function viewJournal() {
     el(
       'p',
       'page__subtitle',
-      'Tout ce que les administrateurs ont fait des pouvoirs qui leur sont confiés : ' +
-        'modération, suppression d’événements, changements de rôle, soutiens.'
+      'Tout ce que les modérateurs ont fait des pouvoirs qui leur sont confiés : ' +
+        'modération, suppression d’événements et de comptes, changements de rôle, soutiens.'
     )
   )
 
@@ -95,7 +102,7 @@ export async function viewJournal() {
       'form__hint',
       `${actions.length} action${actions.length > 1 ? 's' : ''} affichée${actions.length > 1 ? 's' : ''} ` +
         '(les 200 plus récentes). Le journal ne peut être modifié ni effacé depuis ' +
-        'l’application, par personne — pas même par un administrateur.'
+        'l’application, par personne — pas même par un modérateur.'
     )
   )
 

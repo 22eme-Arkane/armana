@@ -1,132 +1,270 @@
-// Armana — écran « Membres » (admin) : tous les inscrits, et désignation
-// directe d'un administrateur en touchant son nom.
+// Armana — écran « Membres » (modérateurs et propriétaire).
+//
+// Refonte du 16/10/2026 (Matthieu) : savoir d'un coup d'œil QUI est inscrit —
+// particulier, lieu culturel ou food truck —, filtrer par type, trier par date,
+// par prénom ou par nom, et des chiffres en tête.
+//
+// La LISTE est ouverte aux modérateurs (migration 0022) : elle ne contient
+// aucune adresse e-mail. La FICHE d'un membre, elle, en expose une et reste
+// réservée au propriétaire — d'où `owner`, qui décide si les lignes s'ouvrent.
+import './admin.css'
 import { el, emptyState } from './components.js'
 import { icon } from './icons.js'
 import { studioHeader } from './studio.js'
 import { navigate } from '../lib/router.js'
 import { isAdmin, getUser } from '../lib/auth.js'
 import { amIOwner, listMembers } from '../lib/admins.js'
+import { avatarMembre, initiales as initialesCommunes, typeVisuel } from './typeCompte.js'
 
 const DTF = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+const MOIS = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' })
+
+const FILTRES = [
+  { cle: 'tous', texte: 'Tous' },
+  { cle: 'particulier', texte: 'Particuliers' },
+  { cle: 'lieu', texte: 'Lieux' },
+  { cle: 'food_truck', texte: 'Food trucks' },
+  { cle: 'moderateurs', texte: 'Modérateurs' },
+]
+
+const TRIS = [
+  { cle: 'recents', texte: 'Récents' },
+  { cle: 'prenom', texte: 'Prénom' },
+  { cle: 'nom', texte: 'Nom' },
+]
+
+const ETATS_FICHE = { pending: 'fiche à valider', approved: 'fiche publiée', rejected: 'fiche refusée' }
+
+// Le filtre et le tri survivent au passage par une fiche : on revient sur la
+// liste telle qu'on l'avait laissée (le temps de la visite seulement).
+const memoire = { filtre: 'tous', tri: 'recents', recherche: '' }
 
 export async function viewMembers() {
-  const wrap = el('section', 'page page--studio-sub')
+  const wrap = el('section', 'page page--studio-sub page--admin')
   wrap.appendChild(studioHeader('Membres', { backTo: '/parametres' }))
 
-  // La LISTE est ouverte aux modérateurs (migration 0022) : elle ne contient
-  // aucune adresse e-mail. La FICHE d'un membre, elle, en expose une et reste
-  // réservée au propriétaire — d'où le `owner` ci-dessous, qui décide si les
-  // lignes sont cliquables.
   if (!isAdmin()) {
     wrap.appendChild(emptyState('Réservé aux modérateurs.'))
     return wrap
   }
   const owner = await amIOwner().catch(() => false)
 
-  const intro = el('p', 'page__subtitle', '')
-  wrap.appendChild(intro)
+  let tous = []
+  try {
+    tous = await listMembers()
+  } catch (e) {
+    wrap.appendChild(emptyState('Chargement impossible : ' + e.message))
+    return wrap
+  }
 
-  // ⚠ RECHERCHE CÔTÉ CLIENT, ET C'EST SUFFISANT. `list_members` renvoie déjà
-  // TOUS les inscrits en une fois : filtrer ici évite un aller-retour par
-  // frappe, et la liste ne compte que quelques centaines de lignes. Le jour où
-  // elle en compterait des milliers, c'est le chargement complet qu'il faudrait
-  // revoir, pas la recherche.
-  const rechercheChamp = el('label', 'form__field membres-recherche')
-  const recherche = el('input', 'form__input')
+  // --- Les chiffres ----------------------------------------------------------
+  const debutMois = new Date()
+  debutMois.setDate(1)
+  debutMois.setHours(0, 0, 0, 0)
+  const compte = (pred) => tous.filter(pred).length
+  const tuiles = el('div', 'admin-tuiles')
+  const tuile = (n, texte) => {
+    const t = el('div', 'admin-tuile')
+    t.append(el('strong', null, String(n)), el('span', null, texte))
+    return t
+  }
+  tuiles.append(
+    tuile(tous.length, 'inscrits'),
+    tuile('+' + compte((m) => new Date(m.created_at) >= debutMois), 'ce mois'),
+    tuile(compte((m) => m.account_type === 'lieu'), 'lieux'),
+    tuile(compte((m) => m.account_type === 'food_truck'), 'food trucks')
+  )
+  wrap.appendChild(tuiles)
+
+  // --- Recherche, filtres, tri ---------------------------------------------------
+  const rechercheChamp = el('label', 'admin-recherche')
+  rechercheChamp.appendChild(icon('search'))
+  const recherche = el('input')
   recherche.type = 'search'
   recherche.placeholder = 'Chercher un nom…'
   recherche.autocomplete = 'off'
+  recherche.value = memoire.recherche
+  recherche.setAttribute('aria-label', 'Chercher un membre')
   rechercheChamp.appendChild(recherche)
   wrap.appendChild(rechercheChamp)
 
-  const box = el('div', 'settings-group')
-  wrap.appendChild(box)
+  const filtres = el('div', 'admin-chips')
+  filtres.setAttribute('role', 'radiogroup')
+  filtres.setAttribute('aria-label', 'Type de compte')
+  const boutonsFiltre = FILTRES.map((f) => {
+    const n =
+      f.cle === 'tous'
+        ? tous.length
+        : f.cle === 'moderateurs'
+          ? compte((m) => m.role === 'admin' || m.is_owner)
+          : compte((m) => (m.account_type || 'particulier') === f.cle)
+    const b = el('button', 'admin-chip')
+    b.type = 'button'
+    b.setAttribute('role', 'radio')
+    b.append(el('span', null, f.texte), el('span', 'admin-chip__n', String(n)))
+    b.addEventListener('click', () => {
+      memoire.filtre = f.cle
+      peindre()
+    })
+    filtres.appendChild(b)
+    return { b, cle: f.cle }
+  })
+  wrap.appendChild(filtres)
+
+  const tris = el('div', 'admin-segments')
+  tris.setAttribute('role', 'radiogroup')
+  tris.setAttribute('aria-label', 'Trier par')
+  const boutonsTri = TRIS.map((t) => {
+    const b = el('button', 'admin-segment', t.texte)
+    b.type = 'button'
+    b.setAttribute('role', 'radio')
+    b.addEventListener('click', () => {
+      memoire.tri = t.cle
+      peindre()
+    })
+    tris.appendChild(b)
+    return { b, cle: t.cle }
+  })
+  wrap.appendChild(tris)
+
+  const resume = el('p', 'admin-resume')
+  wrap.appendChild(resume)
+  const liste = el('div', 'admin-liste')
+  wrap.appendChild(liste)
   wrap.appendChild(
     el(
       'p',
-      'form__hint',
+      'form__hint admin-note',
       owner
-        ? 'Touchez un membre pour ouvrir sa fiche : son adresse pour lui écrire, ' +
-          'ses publications, et la zone de modération.'
-        : 'Les fiches individuelles, qui portent les adresses e-mail, sont ' +
-          'réservées au propriétaire du projet.'
+        ? 'Touchez un membre pour ouvrir sa fiche : son adresse, son activité, sa fiche, ses publications.'
+        : 'Les fiches individuelles, qui portent les adresses e-mail, sont réservées au propriétaire du projet.'
     )
   )
 
-  let tous = []
-
-  async function refresh() {
-    box.innerHTML = ''
-    try {
-      tous = await listMembers()
-    } catch (e) {
-      box.appendChild(emptyState('Chargement impossible : ' + e.message))
-      return
-    }
+  recherche.addEventListener('input', () => {
+    memoire.recherche = recherche.value
     peindre()
-  }
+  })
 
-  recherche.addEventListener('input', peindre)
+  const myId = getUser()?.id
 
   function peindre() {
-    box.innerHTML = ''
-    const q = normaliser(recherche.value)
-    const members = q
-      ? tous.filter((m) => normaliser(m.display_name).includes(q))
-      : tous
+    for (const { b, cle } of boutonsFiltre) {
+      b.classList.toggle('is-active', cle === memoire.filtre)
+      b.setAttribute('aria-checked', String(cle === memoire.filtre))
+    }
+    for (const { b, cle } of boutonsTri) {
+      b.classList.toggle('is-active', cle === memoire.tri)
+      b.setAttribute('aria-checked', String(cle === memoire.tri))
+    }
 
-    // Le total reste celui des INSCRITS ; pendant une recherche on annonce en
-    // plus ce qu'elle donne, sinon on croirait avoir perdu des membres.
-    const pluriel = tous.length > 1 ? 's' : ''
-    intro.textContent = q
-      ? `${members.length} sur ${tous.length} membre${pluriel}.`
-      : `${tous.length} membre${pluriel} inscrit${pluriel}.`
+    const q = normaliser(memoire.recherche)
+    let membres = tous.filter((m) => {
+      if (memoire.filtre === 'moderateurs') return m.role === 'admin' || m.is_owner
+      if (memoire.filtre !== 'tous') return (m.account_type || 'particulier') === memoire.filtre
+      return true
+    })
+    if (q) {
+      membres = membres.filter(
+        (m) => normaliser(m.display_name).includes(q) || normaliser(m.fiche_name).includes(q)
+      )
+    }
 
-    if (!members.length) {
-      box.appendChild(emptyState('Aucun membre ne porte ce nom.'))
+    // Le total reste celui des INSCRITS ; un filtre ou une recherche annonce en
+    // plus ce qu'il donne, sinon on croirait avoir perdu des membres.
+    resume.textContent =
+      membres.length === tous.length
+        ? `${tous.length} membre${tous.length > 1 ? 's' : ''}`
+        : `${membres.length} sur ${tous.length} membres`
+
+    liste.innerHTML = ''
+    if (!membres.length) {
+      liste.appendChild(emptyState(q ? 'Aucun membre ne porte ce nom.' : 'Aucun membre de ce type.'))
       return
     }
 
-    const myId = getUser()?.id
-    const liste = el('div', 'liste-compacte')
-    for (const m of members) {
-      const nom = m.display_name || 'Sans nom'
-      const estAdmin = m.role === 'admin'
-
-      // Un modérateur consulte la liste ; seul le propriétaire ouvre la fiche.
-      // On rend donc la ligne inerte plutôt que de la laisser cliquable vers
-      // une erreur — la base refuserait de toute façon (member_profile).
-      const row = el(owner ? 'button' : 'div', 'liste-compacte__ligne')
-      if (owner) row.type = 'button'
-      else row.classList.add('liste-compacte__ligne--statique')
-      row.appendChild(el('span', 'liste-compacte__pastille', initiales(nom)))
-
-      const corps = el('div', 'liste-compacte__corps')
-      corps.appendChild(el('span', 'liste-compacte__nom', nom))
-      corps.appendChild(
-        el(
-          'span',
-          'liste-compacte__detail',
-          m.id === myId ? 'vous' : 'inscrit le ' + DTF.format(new Date(m.created_at))
-        )
-      )
-      row.appendChild(corps)
-
-      // Un pictogramme plutôt qu'un mot : « Membre » répété sur trois cents
-      // lignes n'apprenait rien et mangeait la place du nom.
-      const role = el('span', 'liste-compacte__role')
-      role.appendChild(icon(m.is_owner || estAdmin ? 'shield' : 'user'))
-      role.title = m.is_owner ? 'Propriétaire' : estAdmin ? 'Modérateur' : 'Membre'
-      role.setAttribute('aria-label', role.title)
-      if (m.is_owner || estAdmin) role.classList.add('liste-compacte__role--moderateur')
-      row.appendChild(role)
-      if (owner) row.addEventListener('click', () => navigate('/membre?id=' + m.id))
-      liste.appendChild(row)
+    // Tri, et les REPÈRES qui vont avec : la lettre pour les tris alphabétiques,
+    // le mois d'inscription pour « Récents ».
+    const cleTri = (m) => {
+      const mots = String(m.display_name || '').trim().split(/\s+/).filter(Boolean)
+      if (memoire.tri === 'prenom') return normaliser(mots[0] || '')
+      return normaliser(mots[mots.length - 1] || '')
     }
-    box.appendChild(liste)
+    if (memoire.tri === 'recents') {
+      membres.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    } else {
+      membres.sort(
+        (a, b) =>
+          cleTri(a).localeCompare(cleTri(b), 'fr') ||
+          normaliser(a.display_name).localeCompare(normaliser(b.display_name), 'fr')
+      )
+    }
+    const repere = (m) => {
+      if (memoire.tri === 'recents') {
+        const t = MOIS.format(new Date(m.created_at))
+        return t.charAt(0).toUpperCase() + t.slice(1)
+      }
+      const c = cleTri(m).charAt(0).toUpperCase()
+      return /[A-Z]/.test(c) ? c : '#'
+    }
+
+    let dernier = null
+    let groupe = null
+    for (const m of membres) {
+      const r = repere(m)
+      if (r !== dernier) {
+        dernier = r
+        liste.appendChild(el('h3', 'admin-repere', r))
+        groupe = el('div', 'admin-groupe')
+        liste.appendChild(groupe)
+      }
+      groupe.appendChild(ligneMembre(m))
+    }
   }
 
-  await refresh()
+  function ligneMembre(m) {
+    const nom = m.display_name || 'Sans nom'
+    const type = m.account_type || 'particulier'
+    // Un modérateur consulte la liste ; seul le propriétaire ouvre la fiche.
+    // Une ligne inerte plutôt qu'un lien vers une erreur — la base refuserait
+    // de toute façon (member_profile).
+    const row = el(owner ? 'button' : 'div', 'admin-membre')
+    if (owner) {
+      row.type = 'button'
+      row.addEventListener('click', () => navigate('/membre?id=' + m.id))
+    }
+    row.appendChild(avatarMembre(nom, type))
+
+    const corps = el('div', 'admin-membre__corps')
+    corps.appendChild(el('span', 'admin-membre__nom', nom + (m.id === myId ? ' (vous)' : '')))
+    const details = [typeVisuel(type).libelle]
+    if (m.fiche_status) details.push(ETATS_FICHE[m.fiche_status] || '')
+    if (m.events_total) details.push(`${m.events_total} évén.`)
+    if (!m.fiche_status && !m.events_total) details.push('inscrit le ' + DTF.format(new Date(m.created_at)))
+    const detail = el('span', 'admin-membre__detail', details.filter(Boolean).join(' · '))
+    if (m.fiche_status === 'pending') detail.classList.add('admin-membre__detail--attente')
+    corps.appendChild(detail)
+    row.appendChild(corps)
+
+    const marques = el('span', 'admin-membre__marques')
+    if (m.is_owner || m.role === 'admin') {
+      const s = icon('shield')
+      s.setAttribute('aria-label', m.is_owner ? 'Propriétaire' : 'Modérateur')
+      s.classList.add('admin-marque--moderateur')
+      marques.appendChild(s)
+    }
+    if (m.is_supporter) {
+      const h = icon('heart')
+      h.setAttribute('aria-label', 'Soutien')
+      h.classList.add('admin-marque--soutien')
+      marques.appendChild(h)
+    }
+    row.appendChild(marques)
+    if (owner) row.appendChild(icon('chevronRight'))
+    return row
+  }
+
+  peindre()
   return wrap
 }
 
@@ -145,13 +283,5 @@ export function normaliser(texte) {
     .trim()
 }
 
-/** Deux lettres pour la pastille : première du prénom, première du nom. */
-export function initiales(nom) {
-  const mots = String(nom || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-  if (!mots.length) return '?'
-  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase()
-  return (mots[0][0] + mots[mots.length - 1][0]).toUpperCase()
-}
+/** Conservé pour les écrans qui l'importaient d'ici (voir typeCompte.js). */
+export const initiales = initialesCommunes

@@ -1,20 +1,56 @@
-// Armana — écran « Modérateurs » (propriétaire uniquement) :
-// qui modère quoi, ajuster les zones, désigner ou retirer.
+// Armana — écran « Modérateurs » (propriétaire uniquement).
+//
+// Refonte du 16/10/2026 (Matthieu) :
+//   * la COUVERTURE du territoire — qui modère chaque département, ceux que
+//     personne ne couvre, ce qui attend dans chacun ;
+//   * l'ACTIVITÉ de chaque modérateur (décisions sur 30 jours, dernière
+//     action), pour repérer celui qui ne modère plus ;
+//   * les candidatures avec le contexte du candidat ;
+//   * NOMMER en choisissant parmi les membres — l'e-mail reste en dépannage ;
+//   * les dernières actions du journal.
 //
 // Le rôle s'appelle toujours `admin` en base (identifiant technique) ; dans
-// l'interface, ce sont des modérateurs — le seul administrateur est le
-// propriétaire, et cet écran lui est réservé (imposé en base, migration 0020).
+// l'interface, ce sont des modérateurs. Tout est réservé au propriétaire et
+// imposé en base (migrations 0020, 0037).
+import './admin.css'
 import { el, emptyState } from './components.js'
 import { icon } from './icons.js'
 import { studioHeader } from './studio.js'
 import { navigate } from '../lib/router.js'
 import { isLoggedIn, getUser } from '../lib/auth.js'
-import { amIOwner, listAdmins, setAdminByEmail } from '../lib/admins.js'
+import {
+  amIOwner,
+  listAdminActions,
+  listAdmins,
+  listMembers,
+  moderationCoverage,
+  setAdminByEmail,
+} from '../lib/admins.js'
 import { decideModeratorRequest, listModeratorRequests, setModerator } from '../lib/moderation.js'
 import { DEPARTEMENTS } from '../lib/departements.js'
+import { avatarMembre, etiquetteType } from './typeCompte.js'
+import { normaliser } from './viewMembers.js'
+import { estSensible, raconter } from './viewJournal.js'
+
+const QUAND = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+/** Au-delà, un modérateur sans aucune action est signalé comme inactif. */
+const JOURS_INACTIF = 30
+
+function joursDepuis(iso) {
+  return iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null
+}
+function depuis(iso) {
+  const j = joursDepuis(iso)
+  if (j == null) return 'jamais'
+  if (j <= 0) return 'aujourd’hui'
+  if (j === 1) return 'hier'
+  return `il y a ${j} jours`
+}
+/** Le prénom, pour les tuiles de couverture où la place manque. */
+const prenom = (a) => String(a.display_name || a.email || '?').trim().split(/\s+/)[0]
 
 export async function viewAdmins() {
-  const wrap = el('section', 'page page--studio-sub')
+  const wrap = el('section', 'page page--studio-sub page--admin')
   wrap.appendChild(studioHeader('Modérateurs', { backTo: '/parametres' }))
 
   if (!isLoggedIn() || !(await amIOwner())) {
@@ -22,63 +58,103 @@ export async function viewAdmins() {
     return wrap
   }
 
-  wrap.appendChild(
-    el(
-      'p',
-      'page__subtitle',
-      'Chaque modérateur relit les événements de sa zone. Touchez les numéros ' +
-        'pour ajuster les départements ; tout retirer retire le rôle.'
-    )
-  )
+  const corps = el('div', 'admin-pile')
+  wrap.appendChild(corps)
 
-  // --- Candidatures en attente, EN TÊTE -------------------------------------
-  // Elles vivent ici plutôt que sur un écran à part (décision de Matthieu) :
-  // c'est le même sujet, et une candidature qui dort dans un onglet séparé
-  // finit par ne plus être vue.
-  const zoneDemandes = el('div')
-  wrap.appendChild(zoneDemandes)
+  async function tout() {
+    const [admins, demandes, couverture, journal] = await Promise.all([
+      listAdmins(),
+      listModeratorRequests().catch(() => []),
+      moderationCoverage().catch(() => null),
+      listAdminActions(5).catch(() => []),
+    ])
+    corps.innerHTML = ''
+    corps.appendChild(blocCouverture(admins, couverture))
+    const enAttente = demandes.filter((d) => d.status === 'pending')
+    if (enAttente.length) corps.appendChild(blocCandidatures(enAttente))
+    corps.appendChild(blocModerateurs(admins))
+    corps.appendChild(blocNommer(admins))
+    corps.appendChild(blocJournal(journal))
+  }
 
-  const listWrap = el('div')
-  wrap.appendChild(listWrap)
+  try {
+    await tout()
+  } catch (e) {
+    corps.appendChild(emptyState('Chargement impossible : ' + e.message))
+  }
+  return wrap
 
-  async function refreshDemandes() {
-    zoneDemandes.innerHTML = ''
-    let demandes = []
-    try {
-      demandes = (await listModeratorRequests()).filter((d) => d.status === 'pending')
-    } catch {
-      return // migration pas encore appliquée : la section reste absente
+  // --- 1. Couverture du territoire ---------------------------------------------
+  function blocCouverture(admins, couverture) {
+    const c = el('section', 'admin-carte')
+    c.appendChild(el('h3', 'admin-carte__titre', 'Couverture du territoire'))
+    const moderateurs = admins.filter((a) => !a.is_owner)
+    const attente = new Map((couverture ?? []).map((r) => [r.dept, (r.events_pending ?? 0) + (r.fiches_pending ?? 0)]))
+    const grille = el('div', 'couverture')
+    for (const d of DEPARTEMENTS) {
+      const qui = moderateurs.filter((a) => (a.mod_depts ?? []).includes(d.code))
+      const n = attente.get(d.code) ?? 0
+      const t = el('div', 'couverture__dept')
+      t.title = d.nom
+      t.classList.add(!qui.length ? 'couverture__dept--vide' : n >= 5 ? 'couverture__dept--charge' : 'couverture__dept--ok')
+      t.appendChild(el('strong', 'couverture__code', d.code))
+      t.appendChild(
+        el('span', 'couverture__qui', qui.length ? qui.map(prenom).join(', ') : 'personne')
+      )
+      if (couverture) t.appendChild(el('span', 'couverture__attente', n ? `${n} en attente` : 'à jour'))
+      grille.appendChild(t)
     }
-    if (!demandes.length) return
-
-    zoneDemandes.appendChild(
-      el('h3', 'support-wall__title', `Candidatures (${demandes.length})`)
+    c.appendChild(grille)
+    const hors = attente.get('hors') ?? 0
+    c.appendChild(
+      el(
+        'p',
+        'admin-carte__detail',
+        'Rouge : aucun modérateur — vous seul relisez ce département. Jaune : 5 publications ou plus attendent.' +
+          (hors ? ` ${hors} en attente hors territoire (sans département).` : '')
+      )
     )
+    return c
+  }
 
+  // --- 2. Candidatures, avec le contexte du candidat ------------------------------
+  function blocCandidatures(demandes) {
+    const c = el('section', 'admin-carte admin-carte--signal')
+    c.appendChild(el('h3', 'admin-carte__titre', `Candidatures (${demandes.length})`))
     for (const d of demandes) {
-      // Carte compacte : il peut y en avoir beaucoup, elles ne doivent pas
-      // remplir l'écran à elles seules.
-      const carte = el('div', 'candidature')
-      const tete = el('div', 'candidature__tete')
-      tete.appendChild(el('span', 'candidature__depts', d.depts.join(' · ')))
-      const ident = el('div', 'candidature__ident')
-      ident.appendChild(el('strong', null, d.display_name))
-      ident.appendChild(el('span', 'candidature__mail', d.email))
+      const item = el('div', 'candidat')
+      const tete = el('div', 'candidat__tete')
+      tete.appendChild(avatarMembre(d.display_name, d.account_type, 'petit'))
+      const ident = el('div', 'candidat__ident')
+      const nom = el('button', 'candidat__nom', d.display_name)
+      nom.type = 'button'
+      nom.title = 'Voir sa fiche'
+      nom.addEventListener('click', () => navigate('/membre?id=' + d.user_id + '&retour=moderateurs'))
+      ident.appendChild(nom)
+      const contexte = []
+      if (d.member_since) contexte.push('inscrit ' + depuis(d.member_since).replace('il y a', 'depuis'))
+      if (d.events_total != null) contexte.push(`${d.events_total} publication${d.events_total > 1 ? 's' : ''}`)
+      ident.appendChild(el('span', 'candidat__contexte', contexte.join(' · ')))
       tete.appendChild(ident)
-      carte.appendChild(tete)
+      if (d.account_type) tete.appendChild(etiquetteType(d.account_type))
+      item.appendChild(tete)
 
+      const zone = el('p', 'candidat__zone')
+      zone.appendChild(el('span', null, 'Demande : '))
+      zone.appendChild(el('strong', null, d.depts.join(' · ')))
+      item.appendChild(zone)
       if (d.role_actuel === 'admin') {
-        carte.appendChild(
+        item.appendChild(
           el(
             'p',
-            'candidature__note',
+            'candidat__note',
             `Déjà modérateur (${(d.depts_actuels ?? []).join(', ') || 'tout'}) — demande une extension.`
           )
         )
       }
-      if (d.message) carte.appendChild(el('p', 'candidature__note', '« ' + d.message + ' »'))
+      if (d.message) item.appendChild(el('p', 'candidat__message', '« ' + d.message + ' »'))
 
-      const rang = el('div', 'candidature__actions')
+      const boutons = el('div', 'admin-carte__boutons')
       const ok = el('button', 'btn btn--success btn--sm', 'Accepter')
       ok.type = 'button'
       const non = el('button', 'btn btn--ghost btn--sm', 'Refuser')
@@ -91,8 +167,7 @@ export async function viewAdmins() {
         ok.disabled = non.disabled = true
         try {
           await decideModeratorRequest(d.id, accept)
-          await refreshDemandes()
-          await refresh() // la personne acceptée apparaît aussitôt dans la liste
+          await tout()
         } catch (e) {
           alert('Action impossible : ' + e.message)
           ok.disabled = non.disabled = false
@@ -100,93 +175,86 @@ export async function viewAdmins() {
       }
       ok.addEventListener('click', () => decider(true))
       non.addEventListener('click', () => decider(false))
-      rang.appendChild(ok)
-      rang.appendChild(non)
-      carte.appendChild(rang)
-      zoneDemandes.appendChild(carte)
+      boutons.append(ok, non)
+      item.appendChild(boutons)
+      c.appendChild(item)
     }
+    return c
   }
 
-  async function refresh() {
-    listWrap.innerHTML = ''
-    let admins = []
-    try {
-      admins = await listAdmins()
-    } catch (e) {
-      listWrap.appendChild(emptyState('Chargement impossible : ' + e.message))
-      return
-    }
-
-    const myId = getUser()?.id
-    listWrap.appendChild(
-      el('h3', 'support-wall__title', `${admins.length} modérateur${admins.length > 1 ? 's' : ''}`)
+  // --- 3. Les modérateurs et leur activité ------------------------------------------
+  function blocModerateurs(admins) {
+    const c = el('section', 'admin-carte')
+    const moderateurs = admins.filter((a) => !a.is_owner)
+    c.appendChild(
+      el('h3', 'admin-carte__titre', `${moderateurs.length} modérateur${moderateurs.length > 1 ? 's' : ''}`)
     )
-    const groupe = el('div', 'liste-compacte')
-    for (const a of admins) {
-      const ligne = el('div', 'liste-compacte__ligne liste-compacte__ligne--statique moderateur')
-      const pastille = el('span', 'liste-compacte__pastille')
-      pastille.appendChild(icon(a.is_owner ? 'shield' : 'user'))
-      ligne.appendChild(pastille)
-
-      const corps = el('div', 'liste-compacte__corps')
-      const nom = el('span', 'liste-compacte__nom', a.display_name || a.email)
-      corps.appendChild(nom)
-      corps.appendChild(
-        el(
-          'span',
-          'liste-compacte__detail',
-          a.is_owner ? 'Propriétaire — tous les droits' : a.email
-        )
+    if (!moderateurs.length) {
+      c.appendChild(
+        el('p', 'admin-carte__detail', 'Personne pour l’instant : vous relisez seul tout le territoire.')
       )
-      // Le nom ouvre la fiche du membre — comme dans la liste des membres, et
-      // au PROPRIÉTAIRE SEUL : la fiche porte l'adresse e-mail et les droits.
-      if (!a.is_owner) {
-        corps.classList.add('moderateur__ident')
-        corps.setAttribute('role', 'button')
-        corps.tabIndex = 0
-        corps.title = 'Voir la fiche de ce membre'
-        const ouvrir = () => navigate('/membre?id=' + a.id + '&retour=moderateurs')
-        corps.addEventListener('click', ouvrir)
-        corps.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            ouvrir()
-          }
-        })
-      }
-      ligne.appendChild(corps)
+      return c
+    }
+    const myId = getUser()?.id
+    for (const a of moderateurs) {
+      const item = el('div', 'moder')
+      const tete = el('div', 'moder__tete')
+      tete.appendChild(avatarMembre(a.display_name || a.email, a.account_type, 'petit'))
+      const ident = el('div', 'moder__ident')
+      const nom = el('button', 'moder__nom', (a.display_name || a.email) + (a.id === myId ? ' (vous)' : ''))
+      nom.type = 'button'
+      nom.title = 'Voir sa fiche'
+      nom.addEventListener('click', () => navigate('/membre?id=' + a.id + '&retour=moderateurs'))
+      ident.appendChild(nom)
 
-      if (a.is_owner) {
-        ligne.appendChild(el('span', 'liste-compacte__fin', 'Tout le territoire'))
-        groupe.appendChild(ligne)
-        continue
-      }
+      // L'activité : ce qui distingue un modérateur présent d'un rôle oublié.
+      const sansAction = joursDepuis(a.last_action_at)
+      const ancienneteRole = joursDepuis(a.role_since)
+      const inactif =
+        (sansAction == null && (ancienneteRole == null || ancienneteRole > JOURS_INACTIF)) ||
+        (sansAction != null && sansAction > JOURS_INACTIF)
+      const activite = el(
+        'span',
+        'moder__activite' + (inactif ? ' moder__activite--inactif' : ''),
+        inactif
+          ? a.last_action_at
+            ? `Aucune action depuis ${sansAction} jours`
+            : 'Aucune action enregistrée'
+          : `${a.actions_30d ?? 0} décision${(a.actions_30d ?? 0) > 1 ? 's' : ''} en 30 j · dernière : ${depuis(a.last_action_at)}`
+      )
+      ident.appendChild(activite)
+      tete.appendChild(ident)
 
-      // Sa zone : un bouton par département couvert, allumé ou non. Chaque
-      // bascule enregistre aussitôt — pas de bouton « Enregistrer » à oublier.
-      const zone = el('div', 'moderateur__zone')
+      // La zone : un résumé qui s'ouvre sur les pastilles (chaque touche
+      // enregistre aussitôt).
+      const bascule = el('button', 'moder__zone-resume')
+      bascule.type = 'button'
+      tete.appendChild(bascule)
+      item.appendChild(tete)
+
+      const zone = el('div', 'admin-zone')
+      zone.hidden = true
       let depts = [...(a.mod_depts ?? [])]
       const boutons = new Map()
       const peindre = () => {
         for (const [code, b] of boutons) b.classList.toggle('is-active', depts.includes(code))
+        bascule.textContent = depts.length ? depts.join(' · ') : 'aucun'
+        bascule.setAttribute('aria-expanded', String(!zone.hidden))
+        bascule.title = 'Modifier la zone de ' + (a.display_name || a.email)
       }
-      // ⚠ Pendant l'enregistrement, TOUTES les pastilles de la ligne sont
-      // gelées : deux bascules rapprochées partiraient chacune de l'état
-      // d'avant l'autre, et la seconde écraserait la première en base
-      // (set_moderator remplace la zone entière). L'état repeint vient du
-      // retour de la RPC — la vérité de la base, pas notre supposition.
+      // ⚠ Pendant l'enregistrement, TOUTES les pastilles sont gelées : deux
+      // touches rapprochées partiraient chacune de l'état d'avant l'autre, et
+      // la seconde écraserait la première (set_moderator remplace la zone).
       const geler = (oui) => {
         for (const b of boutons.values()) b.disabled = oui
       }
       for (const d of DEPARTEMENTS) {
-        const b = el('button', 'recur__day', d.code)
+        const b = el('button', 'admin-zone__dept', d.code)
         b.type = 'button'
         b.title = d.nom
         b.setAttribute('aria-label', d.nom)
         b.addEventListener('click', async () => {
-          const prochain = depts.includes(d.code)
-            ? depts.filter((c) => c !== d.code)
-            : [...depts, d.code]
+          const prochain = depts.includes(d.code) ? depts.filter((x) => x !== d.code) : [...depts, d.code]
           if (
             !prochain.length &&
             !confirm(`Plus aucun département : retirer le rôle de modérateur à ${a.display_name || a.email} ?`)
@@ -197,7 +265,7 @@ export async function viewAdmins() {
           try {
             const res = await setModerator(a.id, prochain)
             if (res?.role !== 'admin') {
-              await refresh() // le rôle est retiré : la ligne disparaît
+              await tout() // le rôle est retiré : la carte disparaît
               return
             }
             depts = [...(res.mod_depts ?? [])]
@@ -211,138 +279,194 @@ export async function viewAdmins() {
         boutons.set(d.code, b)
         zone.appendChild(b)
       }
-      peindre()
-
-      // ⚠ LA ZONE PASSE SOUS LE NOM, ET SE REPLIE.
-      // Avec sept départements, les pastilles occupaient plus de 230 px sur la
-      // même ligne : le nom du modérateur n'avait plus la place de s'afficher.
-      // Le bouton résume la zone (« 04 · 05 ») et l'ouvre au besoin.
-      const bascule = el('button', 'moderateur__bascule')
-      bascule.type = 'button'
-      const resumeZone = () => (depts.length ? depts.join(' · ') : 'aucun département')
-      const majBascule = () => {
-        bascule.textContent = resumeZone()
-        bascule.setAttribute('aria-expanded', String(zone.style.display !== 'none'))
-        bascule.title = 'Modifier la zone de ' + (a.display_name || a.email)
-      }
-      zone.style.display = 'none'
       bascule.addEventListener('click', () => {
-        zone.style.display = zone.style.display === 'none' ? '' : 'none'
-        majBascule()
-      })
-      // Le résumé suit les bascules de département, qui enregistrent aussitôt.
-      const peindreAvecResume = () => {
+        zone.hidden = !zone.hidden
         peindre()
-        majBascule()
+      })
+      peindre()
+      item.appendChild(zone)
+      c.appendChild(item)
+    }
+    return c
+  }
+
+  // --- 4. Nommer : parmi les membres, ou par e-mail en dépannage ---------------------
+  function blocNommer(admins) {
+    const c = el('section', 'admin-carte')
+    c.appendChild(el('h3', 'admin-carte__titre', 'Nommer un modérateur'))
+    const dejaModos = new Set(admins.map((a) => a.id))
+
+    const recherche = el('label', 'admin-recherche')
+    recherche.appendChild(icon('search'))
+    const champ = el('input')
+    champ.type = 'search'
+    champ.placeholder = 'Chercher un membre…'
+    champ.autocomplete = 'off'
+    champ.setAttribute('aria-label', 'Chercher un membre à nommer')
+    recherche.appendChild(champ)
+    c.appendChild(recherche)
+
+    const resultats = el('div', 'nommer__resultats')
+    c.appendChild(resultats)
+    const choix = el('div', 'nommer__choix')
+    choix.hidden = true
+    c.appendChild(choix)
+
+    let membres = null
+    let choisi = null
+    const depts = new Set()
+
+    champ.addEventListener('input', async () => {
+      const q = normaliser(champ.value)
+      resultats.innerHTML = ''
+      if (q.length < 2) return
+      if (!membres) {
+        try {
+          membres = (await listMembers()).filter((m) => !dejaModos.has(m.id) && !m.is_owner)
+        } catch (e) {
+          resultats.appendChild(el('p', 'form__hint', 'Chargement impossible : ' + e.message))
+          return
+        }
       }
-      for (const b of boutons.values()) b.addEventListener('click', () => setTimeout(majBascule, 0))
-      majBascule()
-      ligne.appendChild(bascule)
-
-      if (a.id === myId) ligne.appendChild(el('span', 'liste-compacte__fin', 'vous'))
-      groupe.appendChild(ligne)
-      // La rangée de pastilles vit SOUS la ligne, en pleine largeur.
-      groupe.appendChild(zone)
-      peindreAvecResume()
-    }
-    listWrap.appendChild(groupe)
-  }
-
-  // --- Désigner par e-mail (dépannage : le chemin normal est Membres ou les
-  // candidatures). La ZONE se choisit ici même : rattacher d'office au 04 puis
-  // corriger dans la liste était un détour inutile, et facile à oublier. ---
-  wrap.appendChild(el('h3', 'support-wall__title', 'Désigner par e-mail'))
-  const form = el('div', 'form')
-  const field = el('label', 'form__field')
-  field.appendChild(el('span', 'form__label', 'E-mail du compte'))
-  const emailInput = el('input', 'form__input')
-  emailInput.type = 'email'
-  emailInput.placeholder = 'personne@exemple.fr'
-  field.appendChild(emailInput)
-  form.appendChild(field)
-
-  form.appendChild(el('span', 'form__label', 'Sa zone de modération'))
-  const zoneNouveau = el('div', 'moderateur__zone moderateur__zone--choix')
-  const choisis = new Set()
-  for (const d of DEPARTEMENTS) {
-    const b = el('button', 'recur__day', d.code)
-    b.type = 'button'
-    b.title = d.nom
-    b.setAttribute('aria-label', d.nom)
-    b.addEventListener('click', () => {
-      if (choisis.has(d.code)) choisis.delete(d.code)
-      else choisis.add(d.code)
-      b.classList.toggle('is-active', choisis.has(d.code))
+      const trouves = membres.filter((m) => normaliser(m.display_name).includes(q)).slice(0, 6)
+      if (!trouves.length) {
+        resultats.appendChild(el('p', 'form__hint', 'Aucun membre (non modérateur) ne porte ce nom.'))
+        return
+      }
+      for (const m of trouves) {
+        const b = el('button', 'admin-membre admin-membre--compact')
+        b.type = 'button'
+        b.appendChild(avatarMembre(m.display_name, m.account_type, 'petit'))
+        const corpsLigne = el('div', 'admin-membre__corps')
+        corpsLigne.appendChild(el('span', 'admin-membre__nom', m.display_name || 'Sans nom'))
+        corpsLigne.appendChild(
+          el('span', 'admin-membre__detail', `${m.events_total ?? 0} publication${(m.events_total ?? 0) > 1 ? 's' : ''}`)
+        )
+        b.appendChild(corpsLigne)
+        b.addEventListener('click', () => {
+          choisi = m
+          resultats.innerHTML = ''
+          champ.value = m.display_name || ''
+          peindreChoix()
+        })
+        resultats.appendChild(b)
+      }
     })
-    zoneNouveau.appendChild(b)
+
+    const msg = el('p', 'form__msg')
+    function peindreChoix() {
+      choix.innerHTML = ''
+      choix.hidden = !choisi
+      if (!choisi) return
+      choix.appendChild(el('p', 'admin-carte__detail', `Zone de ${choisi.display_name} :`))
+      const zone = el('div', 'admin-zone')
+      for (const d of DEPARTEMENTS) {
+        const b = el('button', 'admin-zone__dept', d.code)
+        b.type = 'button'
+        b.title = d.nom
+        b.setAttribute('aria-label', d.nom)
+        b.classList.toggle('is-active', depts.has(d.code))
+        b.addEventListener('click', () => {
+          if (depts.has(d.code)) depts.delete(d.code)
+          else depts.add(d.code)
+          b.classList.toggle('is-active', depts.has(d.code))
+        })
+        zone.appendChild(b)
+      }
+      choix.appendChild(zone)
+      const nommer = el('button', 'btn btn--primary btn--block')
+      nommer.type = 'button'
+      nommer.append(icon('userPlus'), el('span', null, ' Nommer modérateur'))
+      nommer.addEventListener('click', async () => {
+        if (!depts.size) {
+          msg.className = 'form__msg form__msg--err'
+          msg.textContent = 'Choisissez au moins un département.'
+          return
+        }
+        const liste = [...depts].sort()
+        if (!confirm(`${choisi.display_name} : modérateur de ${liste.join(', ')} ?`)) return
+        nommer.disabled = true
+        msg.className = 'form__msg'
+        msg.textContent = 'Enregistrement…'
+        try {
+          await setModerator(choisi.id, liste)
+          await tout()
+        } catch (e) {
+          msg.className = 'form__msg form__msg--err'
+          msg.textContent = e.message
+          nommer.disabled = false
+        }
+      })
+      choix.append(nommer, msg)
+    }
+
+    // Par e-mail : dépannage, replié (le chemin normal est la recherche
+    // ci-dessus, ou les candidatures).
+    const details = el('details', 'nommer__email')
+    details.appendChild(el('summary', null, 'Par e-mail (dépannage)'))
+    const email = el('input', 'form__input')
+    email.type = 'email'
+    email.placeholder = 'personne@exemple.fr'
+    email.setAttribute('aria-label', 'E-mail du compte')
+    const zoneEmail = el('div', 'admin-zone')
+    const choisisEmail = new Set()
+    for (const d of DEPARTEMENTS) {
+      const b = el('button', 'admin-zone__dept', d.code)
+      b.type = 'button'
+      b.title = d.nom
+      b.setAttribute('aria-label', d.nom)
+      b.addEventListener('click', () => {
+        if (choisisEmail.has(d.code)) choisisEmail.delete(d.code)
+        else choisisEmail.add(d.code)
+        b.classList.toggle('is-active', choisisEmail.has(d.code))
+      })
+      zoneEmail.appendChild(b)
+    }
+    const msgEmail = el('p', 'form__msg')
+    const go = el('button', 'btn btn--ghost btn--block', 'Désigner par e-mail')
+    go.type = 'button'
+    go.addEventListener('click', async () => {
+      const adresse = email.value.trim()
+      msgEmail.className = 'form__msg form__msg--err'
+      if (!adresse) return (msgEmail.textContent = 'Entrez un e-mail.')
+      if (!choisisEmail.size) return (msgEmail.textContent = 'Choisissez au moins un département.')
+      go.disabled = true
+      msgEmail.className = 'form__msg'
+      msgEmail.textContent = 'Traitement…'
+      try {
+        // Deux temps : la RPC par e-mail retrouve le compte et donne le rôle,
+        // puis on pose la zone demandée (set_moderator travaille sur un id).
+        const res = await setAdminByEmail(adresse, true)
+        if (res?.id) await setModerator(res.id, [...choisisEmail].sort())
+        await tout()
+      } catch (e) {
+        msgEmail.className = 'form__msg form__msg--err'
+        msgEmail.textContent = e.message
+        go.disabled = false
+      }
+    })
+    details.append(email, zoneEmail, go, msgEmail)
+    c.appendChild(details)
+    return c
   }
-  form.appendChild(zoneNouveau)
 
-  const msg = el('p', 'form__msg')
-  const addBtn = el('button', 'btn btn--primary btn--block')
-  addBtn.type = 'button'
-  addBtn.appendChild(icon('shield'))
-  addBtn.appendChild(document.createTextNode(' Désigner modérateur'))
-  addBtn.addEventListener('click', async () => {
-    const email = emailInput.value.trim()
-    msg.className = 'form__msg'
-    if (!email) {
-      msg.classList.add('form__msg--err')
-      msg.textContent = 'Entrez un e-mail.'
-      return
+  // --- 5. Les dernières actions ------------------------------------------------------
+  function blocJournal(journal) {
+    const c = el('section', 'admin-carte')
+    c.appendChild(el('h3', 'admin-carte__titre', 'Dernières actions'))
+    if (!journal.length) {
+      c.appendChild(el('p', 'admin-carte__detail', 'Aucune action enregistrée pour l’instant.'))
     }
-    if (!choisis.size) {
-      msg.classList.add('form__msg--err')
-      msg.textContent = 'Choisissez au moins un département.'
-      return
+    for (const a of journal) {
+      const ligne = el('div', 'journal-court' + (estSensible(a) ? ' journal-court--sensible' : ''))
+      ligne.appendChild(el('span', 'journal-court__texte', raconter(a)))
+      ligne.appendChild(el('span', 'journal-court__quand', QUAND.format(new Date(a.created_at))))
+      c.appendChild(ligne)
     }
-    addBtn.disabled = true
-    msg.textContent = 'Traitement…'
-    try {
-      // Deux temps : la RPC par e-mail retrouve le compte et donne le rôle,
-      // puis on pose la zone demandée. C'est la seule voie — set_moderator
-      // travaille sur un identifiant, pas sur une adresse.
-      const res = await setAdminByEmail(email, true)
-      const depts = [...choisis].sort()
-      if (res?.id) await setModerator(res.id, depts)
-      msg.className = 'form__msg form__msg--ok'
-      msg.textContent = `${res?.display_name || email} modère désormais : ${depts.join(', ')}.`
-      emailInput.value = ''
-      choisis.clear()
-      for (const b of zoneNouveau.children) b.classList.remove('is-active')
-      await refresh()
-    } catch (e) {
-      msg.className = 'form__msg form__msg--err'
-      msg.textContent = e.message
-    } finally {
-      addBtn.disabled = false
-    }
-  })
-  form.appendChild(addBtn)
-  form.appendChild(msg)
-  wrap.appendChild(form)
-
-  // --- Journal des actions (propriétaire) -----------------------------------
-  const grp = el('div', 'settings-group')
-  const lien = el('button', 'settings-row')
-  lien.type = 'button'
-  const lab = el('div', 'settings-row__label')
-  lab.appendChild(icon('shield'))
-  lab.appendChild(document.createTextNode('Journal des actions'))
-  lien.appendChild(lab)
-  lien.appendChild(icon('chevronRight'))
-  lien.addEventListener('click', () => navigate('/journal'))
-  grp.appendChild(lien)
-  wrap.appendChild(grp)
-  wrap.appendChild(
-    el(
-      'p',
-      'form__hint',
-      'Qui a modéré, supprimé un événement, changé un rôle ou une zone, et quand. ' +
-        'Impossible à effacer depuis l’application.'
-    )
-  )
-
-  await Promise.all([refreshDemandes(), refresh()])
-  return wrap
+    const lien = el('button', 'btn btn--ghost btn--block', 'Tout le journal')
+    lien.type = 'button'
+    lien.addEventListener('click', () => navigate('/journal'))
+    c.appendChild(lien)
+    return c
+  }
 }

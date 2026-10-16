@@ -86,6 +86,53 @@ export async function listMembers() {
 }
 
 /**
+ * Les publications d'un membre, toutes (en attente et refusées comprises) —
+ * pour sa fiche. Le propriétaire est modérateur : la RLS les lui montre.
+ */
+export async function listMemberEvents(id, max = 8) {
+  const { data, error } = await supabase
+    .from('events_geo')
+    .select('id, title, starts_at, ends_at, status')
+    .eq('created_by', id)
+    .order('starts_at', { ascending: false })
+    .limit(max)
+  if (error) throw error
+  return data ?? []
+}
+
+/** Ce qui attend, département par département (migration 0037). */
+export async function moderationCoverage() {
+  const { data, error } = await supabase.rpc('moderation_coverage')
+  if (error) throw error
+  return data ?? []
+}
+
+/**
+ * Supprime un compte (propriétaire) — LES PHOTOS D'ABORD, LE COMPTE ENSUITE.
+ *
+ * ⚠ RÈGLE DE STOCKAGE : supprimer le compte en base ne libère pas le Storage.
+ * On efface donc d'abord tous les fichiers de son dossier `{id}/` par l'API
+ * Storage, puis on appelle `delete_member`, qui REFUSE tant qu'il en reste un.
+ * Profil, événements, fiche, planning et favoris partent alors en cascade.
+ * @param {(etape:string)=>void} [onEtape]
+ */
+export async function deleteMember(id, onEtape) {
+  onEtape?.('Recherche de ses photos…')
+  const { data: fichiers, error: e1 } = await supabase.rpc('member_storage_paths', { p_id: id })
+  if (e1) throw e1
+  const chemins = (fichiers ?? []).map((f) => f.name)
+  for (let i = 0; i < chemins.length; i += 100) {
+    onEtape?.(`Suppression des photos (${Math.min(i + 100, chemins.length)} / ${chemins.length})…`)
+    const { error } = await supabase.storage.from('event-photos').remove(chemins.slice(i, i + 100))
+    if (error) throw new Error('Suppression des photos : ' + error.message)
+  }
+  onEtape?.('Suppression du compte…')
+  const { error: e2 } = await supabase.rpc('delete_member', { p_id: id })
+  if (e2) throw e2
+  return chemins.length
+}
+
+/**
  * Enregistre le passage du jour (statistiques de fréquentation).
  * Ne bloque jamais l'utilisateur, mais LAISSE UNE TRACE en cas d'échec.
  *

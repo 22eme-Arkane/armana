@@ -1,0 +1,457 @@
+/* Armana — écrans d'administration : Membres, fiche membre, Messages,
+   Modérateurs (refonte du 16/10/2026). Même langage que « Mon profil » :
+   cartes blanches arrondies, titres Oswald bleus centrés ; les LISTES restent
+   alignées à gauche, c'est ce qui se lit le plus vite. */
+
+.page--admin { gap: 0.75rem; }
+.admin-pile { display: flex; flex-direction: column; gap: 0.75rem; }
+.admin-note { margin: 0; text-align: center; }
+.page--studio-sub .admin-note { color: color-mix(in srgb, var(--studio-ink) 65%, #fff); }
+
+/* --- Pastille et étiquette du type de compte ------------------------------- */
+.avatar-membre {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.avatar-membre svg { width: 19px; height: 19px; }
+.avatar-membre--petit { width: 30px; height: 30px; font-size: 0.68rem; }
+.avatar-membre--petit svg { width: 15px; height: 15px; }
+.avatar-membre--grand { width: 68px; height: 68px; font-size: 1.35rem; }
+.avatar-membre--grand svg { width: 32px; height: 32px; }
+.etiquette-type {
+  display: inline-block;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* --- Chiffres en tête -------------------------------------------------------- */
+.admin-tuiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
+.admin-tuile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.55rem 0.2rem;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(6, 43, 29, 0.06);
+  text-align: center;
+}
+.admin-tuile strong {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: var(--studio-blue, #0b55c5);
+}
+.admin-tuile span { font-size: 0.72rem; color: color-mix(in srgb, var(--studio-ink) 65%, #fff); }
+
+/* --- Recherche, filtres, tri ----------------------------------------------------- */
+.admin-recherche {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.8rem;
+  border: 1px solid rgba(6, 43, 29, 0.14);
+  border-radius: 14px;
+  background: #fff;
+}
+.admin-recherche svg { width: 18px; height: 18px; color: color-mix(in srgb, var(--studio-ink) 55%, #fff); flex: 0 0 auto; }
+.admin-recherche input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.65rem 0;
+  border: none;
+  background: transparent;
+  color: var(--studio-ink);
+  font: inherit;
+  outline: none;
+}
+.admin-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: center; }
+.admin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.38rem 0.75rem;
+  border: 1px solid rgba(6, 43, 29, 0.14);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--studio-ink);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.admin-chip__n {
+  min-width: 1.3rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: rgba(6, 43, 29, 0.08);
+  font-size: 0.7rem;
+  text-align: center;
+}
+.admin-chip.is-active { background: var(--studio-blue, #0b55c5); border-color: var(--studio-blue, #0b55c5); color: #fff; }
+.admin-chip.is-active .admin-chip__n { background: rgba(255, 255, 255, 0.25); }
+
+.admin-segments {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: 3px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(6, 43, 29, 0.12);
+}
+.admin-segment {
+  padding: 0.5rem 0.3rem;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--studio-ink);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.admin-segment.is-active { background: var(--mask-yellow, #f4ca15); font-weight: 800; }
+.admin-resume { margin: 0; text-align: center; font-size: 0.8rem; font-weight: 700; color: var(--studio-green); }
+
+/* --- Liste des membres -------------------------------------------------------------- */
+.admin-liste { display: flex; flex-direction: column; gap: 0.35rem; }
+.admin-repere {
+  margin: 0.45rem 0.3rem 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--studio-blue, #0b55c5);
+}
+.admin-groupe {
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(6, 43, 29, 0.06);
+  overflow: hidden;
+}
+.admin-membre {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  border-top: 1px solid rgba(6, 43, 29, 0.07);
+  background: transparent;
+  color: var(--studio-ink);
+  font: inherit;
+  text-align: left;
+}
+.admin-groupe > .admin-membre:first-child { border-top: none; }
+button.admin-membre { cursor: pointer; }
+.admin-membre > svg:last-child { width: 18px; height: 18px; flex: 0 0 auto; opacity: 0.45; }
+.admin-membre__corps { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.admin-membre__nom { font-weight: 800; font-size: 0.92rem; overflow-wrap: anywhere; }
+.admin-membre__detail { font-size: 0.76rem; color: color-mix(in srgb, var(--studio-ink) 62%, #fff); }
+.admin-membre__detail--attente { color: #9a6b00; font-weight: 700; }
+.admin-membre__marques { display: flex; gap: 0.3rem; flex: 0 0 auto; }
+.admin-membre__marques svg { width: 18px; height: 18px; }
+.admin-marque--moderateur { color: var(--studio-blue, #0b55c5); }
+.admin-marque--soutien { color: var(--studio-red, #f04b2f); fill: currentColor; }
+.admin-membre--compact {
+  border: 1px solid rgba(6, 43, 29, 0.12);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* --- Cartes ----------------------------------------------------------------------------- */
+.admin-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.95rem 0.9rem;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(6, 43, 29, 0.08);
+}
+.admin-carte--signal { box-shadow: inset 0 0 0 2px var(--mask-yellow, #f4ca15), 0 2px 10px rgba(6, 43, 29, 0.08); }
+.admin-carte__titre {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--studio-blue, #0b55c5);
+}
+.admin-carte__fort {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--studio-green);
+}
+.admin-carte__detail {
+  margin: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--studio-ink) 68%, #fff);
+}
+.admin-carte__boutons { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; }
+.admin-carte a.btn { text-decoration: none; }
+
+/* --- Fiche membre ------------------------------------------------------------------------- */
+.membre-tete {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 1rem 0.8rem;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(6, 43, 29, 0.08);
+  text-align: center;
+}
+.membre-tete__nom {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.15;
+  color: var(--studio-green);
+  overflow-wrap: anywhere;
+}
+.membre-tete__badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.3rem; }
+.admin-badge {
+  display: inline-block;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.admin-badge--role { background: rgba(11, 85, 197, 0.12); color: var(--studio-blue, #0b55c5); }
+.admin-badge--attente { background: rgba(244, 202, 21, 0.4); color: #6a4a00; }
+.admin-badge--ok { background: rgba(38, 120, 76, 0.14); color: var(--studio-green); }
+.admin-badge--refus { background: rgba(240, 75, 47, 0.14); color: #a3271a; }
+.admin-badge--soutien { background: rgba(244, 202, 21, 0.25); color: #6a4a00; }
+
+.membre-contact { flex-direction: row; align-items: center; flex-wrap: wrap; justify-content: center; }
+.membre-contact__mail {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.membre-contact__mail svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--studio-blue, #0b55c5); }
+.membre-contact__actions { display: flex; gap: 0.35rem; }
+.membre-contact__actions .btn { text-decoration: none; }
+
+.membre-tuiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
+.membre-tuile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.7rem 0.4rem;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(6, 43, 29, 0.06);
+  text-align: center;
+}
+.membre-tuile__libelle { font-size: 0.72rem; color: color-mix(in srgb, var(--studio-ink) 60%, #fff); }
+.membre-tuile__valeur { font-size: 0.98rem; color: var(--studio-ink); }
+.membre-tuile__detail { font-size: 0.7rem; line-height: 1.3; color: color-mix(in srgb, var(--studio-ink) 60%, #fff); }
+
+.membre-publication {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.2rem;
+  border-top: 1px solid rgba(6, 43, 29, 0.08);
+  color: var(--studio-ink);
+  text-decoration: none;
+}
+.membre-publication__titre { font-weight: 700; font-size: 0.88rem; overflow-wrap: anywhere; }
+.membre-publication__statut { font-size: 0.74rem; color: color-mix(in srgb, var(--studio-ink) 60%, #fff); }
+.membre-publication__statut--pending { color: #9a6b00; font-weight: 700; }
+.membre-publication__statut--rejected { color: #a3271a; font-weight: 700; }
+
+.admin-zone { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; }
+.admin-zone[hidden] { display: none; }
+.admin-zone__dept {
+  min-width: 2.8rem;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid rgba(6, 43, 29, 0.16);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--studio-ink);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.admin-zone__dept.is-active { background: var(--studio-blue, #0b55c5); border-color: var(--studio-blue, #0b55c5); color: #fff; }
+.admin-zone__dept:disabled { opacity: 0.55; }
+
+.membre-danger { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+.membre-danger__ouvrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  background: none;
+  color: #a3271a;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.membre-danger__ouvrir svg { width: 17px; height: 17px; }
+.membre-danger__panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.9rem;
+  border-radius: 18px;
+  background: rgba(240, 75, 47, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(240, 75, 47, 0.35);
+}
+.membre-danger__panneau[hidden] { display: none; }
+.membre-danger__texte { margin: 0; font-size: 0.82rem; line-height: 1.45; text-align: center; color: #7a1d12; }
+
+/* --- Messages ---------------------------------------------------------------------------- */
+.message-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.8rem 0.85rem;
+  border-radius: 0 18px 18px 0;
+  border-left: 5px solid var(--studio-green);
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(6, 43, 29, 0.07);
+}
+.message-carte--bug { border-left-color: var(--studio-red, #f04b2f); }
+.message-carte--nouveau { box-shadow: inset 0 0 0 2px var(--mask-yellow, #f4ca15), 0 2px 10px rgba(6, 43, 29, 0.07); }
+.message-carte__tete { display: flex; align-items: center; gap: 0.5rem; }
+.message-carte__qui { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.message-carte__auteur {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--studio-blue, #0b55c5);
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.88rem;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+span.message-carte__auteur { color: var(--studio-ink); text-decoration: none; cursor: default; }
+.message-carte__quand { font-size: 0.72rem; color: color-mix(in srgb, var(--studio-ink) 60%, #fff); }
+.message-carte__nouveau {
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: var(--mask-yellow, #f4ca15);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.message-carte__type { padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.7rem; font-weight: 800; }
+.message-carte__type--bug { background: rgba(240, 75, 47, 0.14); color: #a3271a; }
+.message-carte__type--avis { background: rgba(38, 120, 76, 0.14); color: var(--studio-green); }
+.message-carte__texte { margin: 0; font-size: 0.9rem; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.message-carte__technique {
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(11, 85, 197, 0.07);
+  font-size: 0.74rem;
+  color: color-mix(in srgb, var(--studio-ink) 75%, #fff);
+}
+.message-carte__actions { display: flex; align-items: center; gap: 0.4rem; }
+.message-carte__actions .btn svg { width: 15px; height: 15px; }
+.message-carte__effacer { margin-left: auto; }
+
+/* --- Modérateurs --------------------------------------------------------------------------- */
+.couverture { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 0.35rem; }
+.couverture__dept {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.5rem 0.25rem;
+  border-radius: 12px;
+  text-align: center;
+}
+.couverture__dept--ok { background: rgba(38, 120, 76, 0.12); }
+.couverture__dept--charge { background: rgba(244, 202, 21, 0.35); }
+.couverture__dept--vide { background: rgba(240, 75, 47, 0.12); }
+.couverture__code { font-family: var(--font-display); font-size: 1.15rem; color: var(--studio-ink); }
+.couverture__qui { font-size: 0.72rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.couverture__dept--vide .couverture__qui { color: #a3271a; }
+.couverture__attente { font-size: 0.68rem; color: color-mix(in srgb, var(--studio-ink) 62%, #fff); }
+
+.candidat, .moder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(6, 43, 29, 0.08);
+}
+.candidat__tete, .moder__tete { display: flex; align-items: center; gap: 0.55rem; }
+.candidat__ident, .moder__ident { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.candidat__nom, .moder__nom {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--studio-ink);
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.candidat__contexte, .moder__activite { font-size: 0.74rem; color: color-mix(in srgb, var(--studio-ink) 62%, #fff); }
+.moder__activite--inactif { color: #a3271a; font-weight: 700; }
+.candidat__zone, .candidat__note { margin: 0; font-size: 0.8rem; }
+.candidat__message { margin: 0; font-size: 0.82rem; font-style: italic; overflow-wrap: anywhere; }
+.moder__zone-resume {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid rgba(11, 85, 197, 0.35);
+  border-radius: 999px;
+  background: rgba(11, 85, 197, 0.08);
+  color: var(--studio-blue, #0b55c5);
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.nommer__resultats { display: flex; flex-direction: column; gap: 0.3rem; }
+.nommer__choix { display: flex; flex-direction: column; gap: 0.5rem; }
+.nommer__choix[hidden] { display: none; }
+.nommer__email summary { cursor: pointer; text-align: center; font-size: 0.8rem; font-weight: 700; color: var(--studio-green); }
+.nommer__email[open] { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.journal-court {
+  display: flex;
+  flex-direction: column;
+  padding: 0.45rem 0.1rem;
+  border-top: 1px solid rgba(6, 43, 29, 0.08);
+}
+.journal-court__texte { font-size: 0.82rem; line-height: 1.4; }
+.journal-court__quand { font-size: 0.7rem; color: color-mix(in srgb, var(--studio-ink) 58%, #fff); }
+.journal-court--sensible .journal-court__texte { color: #a3271a; font-weight: 700; }
