@@ -105,14 +105,36 @@ export async function confirmerPlanning() {
   return data
 }
 
+/**
+ * Exécute une requête AVEC le repère (migration 0036), puis SANS s'il manque.
+ * ⚠ Le planning d'un camion ne doit jamais casser parce que la migration n'est
+ * pas encore passée : on perd seulement le repère en attendant.
+ * @param {(avecRepere:boolean)=>PromiseLike<{data:any,error:any}>} requete
+ */
+let repereDispo = true
+async function avecRepere(requete) {
+  let r = await requete(repereDispo)
+  if (r.error && repereDispo && /place_hint/.test(r.error.message)) {
+    repereDispo = false
+    r = await requete(false)
+  }
+  if (r.error) throw r.error
+  return r.data
+}
+
 export async function listerCreneaux(truckId) {
-  const { data, error } = await supabase
-    .from('food_truck_slots')
-    .select('id, truck_id, weekday, start_time, end_time, location, place_label, place_hint, valid_from, valid_until')
-    .eq('truck_id', truckId)
-    .order('weekday')
-    .order('start_time')
-  if (error) throw error
+  const data = await avecRepere((repere) =>
+    supabase
+      .from('food_truck_slots')
+      .select(
+        'id, truck_id, weekday, start_time, end_time, location, place_label, ' +
+          (repere ? 'place_hint, ' : '') +
+          'valid_from, valid_until'
+      )
+      .eq('truck_id', truckId)
+      .order('weekday')
+      .order('start_time')
+  )
   return data.map(avecPoint)
 }
 
@@ -129,11 +151,13 @@ export async function enregistrerCreneau(c) {
     valid_from: c.valid_from || null,
     valid_until: c.valid_until || null,
   }
-  const req = c.id
-    ? supabase.from('food_truck_slots').update(ligne).eq('id', c.id)
-    : supabase.from('food_truck_slots').insert(ligne)
-  const { error } = await req
-  if (error) throw error
+  await avecRepere((repere) => {
+    const l = { ...ligne }
+    if (!repere) delete l.place_hint
+    return c.id
+      ? supabase.from('food_truck_slots').update(l).eq('id', c.id)
+      : supabase.from('food_truck_slots').insert(l)
+  })
 }
 
 export async function supprimerCreneau(id) {
@@ -143,15 +167,18 @@ export async function supprimerCreneau(id) {
 
 /** Exceptions à venir (ou en cours) d'un camion. */
 export async function listerExceptions(truckId) {
-  const { data, error } = await supabase
-    .from('food_truck_exceptions')
-    .select(
-      'id, truck_id, slot_id, kind, date_start, date_end, start_time, end_time, location, place_label, place_hint, event_id, events(title)'
-    )
-    .eq('truck_id', truckId)
-    .gte('date_end', aujourdhuiParis())
-    .order('date_start')
-  if (error) throw error
+  const data = await avecRepere((repere) =>
+    supabase
+      .from('food_truck_exceptions')
+      .select(
+        'id, truck_id, slot_id, kind, date_start, date_end, start_time, end_time, location, place_label, ' +
+          (repere ? 'place_hint, ' : '') +
+          'event_id, events(title)'
+      )
+      .eq('truck_id', truckId)
+      .gte('date_end', aujourdhuiParis())
+      .order('date_start')
+  )
   return data.map(avecPoint)
 }
 
@@ -174,8 +201,11 @@ export async function ajouterException(e) {
     place_hint: e.place_hint?.trim() || null,
     event_id: e.event_id || null,
   }
-  const { error } = await supabase.from('food_truck_exceptions').insert(ligne)
-  if (error) throw error
+  await avecRepere((repere) => {
+    const l = { ...ligne }
+    if (!repere) delete l.place_hint
+    return supabase.from('food_truck_exceptions').insert(l)
+  })
 }
 
 export async function supprimerException(id) {
