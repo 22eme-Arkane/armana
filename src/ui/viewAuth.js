@@ -2,7 +2,15 @@
 import { el } from './components.js'
 import { navigate } from '../lib/router.js'
 import { studioHeader } from './studio.js'
-import { signIn, signUp, resetPassword, isLoggedIn, TYPES_COMPTE } from '../lib/auth.js'
+import {
+  signIn,
+  signUp,
+  resetPassword,
+  isLoggedIn,
+  nomDisponible,
+  NOM_MIN,
+  TYPES_COMPTE,
+} from '../lib/auth.js'
 
 export function viewAuth() {
   // Le nom du projet est dans la barre de titre, et c'est le LOGO qui accueille
@@ -34,6 +42,21 @@ export function viewAuth() {
   const msg = el('p', 'form__msg')
 
   const nameField = field('Nom affiché', 'text', 'name', 'Comment on vous verra')
+  // Un nom déjà pris se signale DÈS qu'on quitte le champ (migration 0038),
+  // plutôt qu'au moment d'envoyer le formulaire entier.
+  const nomPris = el('span', 'form__hint', '')
+  nomPris.hidden = true
+  nameField.wrap.appendChild(nomPris)
+  nameField.input.addEventListener('blur', async () => {
+    const nom = nameField.input.value.trim()
+    nomPris.hidden = true
+    if (mode !== 'signup' || nom.length < NOM_MIN) return
+    if (!(await nomDisponible(nom))) {
+      nomPris.textContent = 'Ce nom est déjà utilisé par un autre membre : choisissez-en un autre.'
+      nomPris.hidden = false
+    }
+  })
+  nameField.input.addEventListener('input', () => (nomPris.hidden = true))
 
   // --- « Vous êtes… » (migration 0033), à l'inscription seulement ---------
   // Trois pastilles qui s'excluent. ⚠ Le choix ne donne AUCUN droit : il ouvre

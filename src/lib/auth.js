@@ -112,13 +112,31 @@ export async function refreshProfile() {
 export const NOM_MIN = 2
 export const NOM_MAX = 60
 
+const NOM_PRIS = 'Ce nom est déjà utilisé par un autre membre. Choisissez-en un autre.'
+
+/**
+ * Ce nom est-il libre ? (migration 0038) — la comparaison ignore casse,
+ * accents et ponctuation : « Benoît » et « benoit » sont le même nom. Son
+ * propre nom est toujours libre pour soi.
+ * ⚠ Sans la migration, la fonction manque : on répond « libre » plutôt que de
+ * bloquer toute inscription.
+ */
+export async function nomDisponible(nom) {
+  const { data, error } = await supabase.rpc('nom_disponible', { p_nom: nom })
+  if (error) {
+    console.warn('[Armana] Vérification du nom indisponible :', error.message)
+    return true
+  }
+  return data !== false
+}
+
 /**
  * Change le nom affiché de la personne connectée.
  *
- * ⚠ AUCUNE MIGRATION N'EST NÉCESSAIRE, et ce n'est pas un oubli : la politique
- * `profiles_update_self_or_owner` autorise déjà chacun à modifier SA ligne, et
- * le garde-fou `guard_profile_role` ne protège que `is_owner`, `role`,
- * `mod_depts` et `supporter_since`. `display_name` est libre.
+ * La politique `profiles_update_self_or_owner` autorise chacun à modifier SA
+ * ligne ; le garde-fou `guard_profile_role` ne protège que `is_owner`, `role`,
+ * `mod_depts` et `supporter_since`. Seule règle sur le nom depuis la migration
+ * 0038 : il doit être LIBRE — deux membres ne portent pas le même.
  *
  * ⚠ LA COLONNE N'A AUCUNE CONTRAINTE DE LONGUEUR en base (`display_name text`).
  * Les bornes ci-dessous sont donc de simple confort de saisie, pas une
@@ -131,9 +149,12 @@ export async function updateDisplayName(nom) {
   const propre = String(nom ?? '').trim().replace(/\s+/g, ' ')
   if (propre.length < NOM_MIN) throw new Error(`Le nom doit faire au moins ${NOM_MIN} caractères.`)
   if (propre.length > NOM_MAX) throw new Error(`Le nom ne peut pas dépasser ${NOM_MAX} caractères.`)
+  if (!(await nomDisponible(propre))) throw new Error(NOM_PRIS)
 
   const { error } = await supabase.from('profiles').update({ display_name: propre }).eq('id', uid)
-  if (error) throw error
+  // La base a le dernier mot (migration 0038) : si quelqu'un a pris ce nom
+  // entre-temps, son refus remonte tel quel.
+  if (error) throw error.code === '23505' ? new Error(NOM_PRIS) : error
 
   // Les métadonnées d'authentification ne sont lues NULLE PART par
   // l'application : le trigger d'inscription les consomme une fois, et c'est
@@ -160,6 +181,9 @@ export const isAdmin = () => state.profile?.role === 'admin'
  * (voir loadProfile).
  */
 export async function signUp(email, password, displayName, accountType = 'particulier') {
+  // Le nom AVANT le compte : une fois le compte créé, il serait trop tard pour
+  // en changer (la base ajouterait un numéro, voir la migration 0038).
+  if (!(await nomDisponible(displayName))) throw new Error(NOM_PRIS)
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
