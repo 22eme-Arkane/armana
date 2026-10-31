@@ -7,13 +7,61 @@
    `.chips-row--studio.chips-row--rapides .chip` de style.css — le piège de
    spécificité rencontré quatre fois sur ce projet. */
 
-.screen--studio-calendar .screen-head--studio { row-gap: 0; }
+/* Centré (proposition 17 sur 22, choisie le 31/10/2026) : le logo et le nom sur
+   une ligne, la devise dessous. Les colonnes vides de part et d'autre centrent
+   le couple logo + nom. */
+.screen--studio-calendar .screen-head--studio {
+  grid-template-columns: 1fr auto auto 1fr;
+  row-gap: 0;
+}
+.screen--studio-calendar .screen-head--studio > img {
+  grid-column: 2;
+  grid-row: 1;
+  width: 72px;
+  height: 58px;
+}
+.screen--studio-calendar .screen-title--studio {
+  grid-column: 3;
+  grid-row: 1;
+  font-size: 3.5rem;
+}
+
+/* Le bouton du calendrier : un petit rond sur sa propre ligne, sous le
+   calendrier, sans contour pour rester discret (choix du 31/10/2026). */
+.screen--studio-calendar .studio-calendar-toggle {
+  position: relative;
+  display: flex;
+  width: 28px;
+  height: 28px;
+  margin: 0 auto 5px;
+  border: none;
+  color: var(--mask-yellow);
+  background: var(--studio-blue);
+  box-shadow: 0 4px 10px rgba(6, 43, 29, 0.28);
+  transition: transform 0.18s ease;
+}
+.screen--studio-calendar .studio-calendar-toggle:active { transform: scale(0.94); }
+/* Le rond est petit, pas la zone à toucher : 44 px pour le doigt. */
+.screen--studio-calendar .studio-calendar-toggle::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+.screen--studio-calendar .studio-calendar-toggle svg { width: 17px; height: 17px; stroke-width: 2.8; }
+/* ⚠ Même spécificité que `.studio-calendar-toggle.is-open` de style.css (jaune) :
+   sans cette règle, le gagnant dépendrait de l'ordre des feuilles au build. */
+.screen--studio-calendar .studio-calendar-toggle.is-open {
+  color: var(--mask-yellow);
+  background: var(--studio-blue);
+}
+.screen--studio-calendar .studio-calendar-toggle.is-open svg { transform: rotate(180deg); }
 
 /* La devise, celle du sticker, sous le nom. */
 .entete-devise {
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 2;
-  margin: -0.15rem 0 0;
+  justify-self: center;
+  margin: 0;
   color: var(--mask-yellow);
   font-family: var(--font-display);
   font-size: 0.82rem;

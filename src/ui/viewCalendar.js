@@ -71,15 +71,16 @@ export async function viewCalendar() {
   // La devise du sticker, sous le nom (en-tête « Signature », enteteAgenda.css).
   head.appendChild(el('p', 'entete-devise', 'L’agenda culturel partagé'))
 
+  // Le bouton du calendrier n'est plus dans l'en-tête : il a sa propre ligne sous
+  // le calendrier, et se place donc plus bas dans la vue (juste après `cal`).
   const calendarToggle = el('button', 'studio-calendar-toggle')
   calendarToggle.type = 'button'
   calendarToggle.title = 'Fermer le calendrier'
   calendarToggle.setAttribute('aria-label', 'Fermer le calendrier')
   calendarToggle.setAttribute('aria-expanded', 'true')
   calendarToggle.classList.add('is-open')
-  calendarToggle.appendChild(icon('calendar'))
+  calendarToggle.appendChild(icon('chevronDown'))
 
-  head.appendChild(calendarToggle)
   // ⚠ PAS de bouton de partage ici : j'en avais ajouté un « pour la cohérence »,
   // Matthieu l'a fait retirer — l'Agenda est déjà chargé (titre, calendrier,
   // filtres) et c'était mieux avant. Il reste sur Carte, Favoris et Profil.
@@ -325,6 +326,7 @@ export async function viewCalendar() {
   const grid = el('div', 'calendar__grid')
   cal.appendChild(grid)
   wrap.appendChild(cal)
+  wrap.appendChild(calendarToggle)
 
   calendarToggle.addEventListener('click', () => {
     const willOpen = cal.hidden

@@ -2502,8 +2502,10 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
 }
 .calendar--studio .calendar__cell {
   /* Case un peu plus haute + réserve en bas : le chiffre remonte et la pastille
-     « il y a un événement » a sa place sans mordre dessus. */
-  height: 29px;
+     « il y a un événement » a sa place sans mordre dessus.
+     24 px : le calendrier resserré laisse plus de place aux cartes (Matthieu,
+     31/10/2026) ; la hauteur n'était réduite jusque-là qu'à partir de 760 px. */
+  height: 24px;
   padding-bottom: 6px;
   aspect-ratio: auto;
   color: var(--studio-green);
@@ -2647,7 +2649,6 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
   width: 54px;
   height: 54px;
   margin-top: -22px;
-  border: 3px solid var(--mask-yellow, #f4ca15);
   border-radius: 18px;
   background: var(--studio-blue, #0b55c5);
   color: var(--mask-yellow, #f4ca15);
@@ -3166,10 +3167,6 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
 @media (min-width: 760px) {
   .calendar--studio {
     max-width: none;
-  }
-  .calendar--studio .calendar__cell {
-    height: 24px;
-    aspect-ratio: auto;
   }
   .screen--studio-calendar .events-list {
     display: flex;
