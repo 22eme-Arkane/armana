@@ -993,30 +993,70 @@ a.settings-row .settings-row__label { word-break: break-all; }
 .page--studio-profile .settings-group--nu .settings-row__label svg { color: #fff; }
 .page--studio-profile .settings-group--nu .settings-row--danger { background: var(--studio-red); }
 
-/* Bannière de don : pleine largeur, jaune, coin bleu en biais. */
+/* Bannière de don, en tête du Profil : un dégradé corail → framboise, chaud,
+   qui tranche sur le crème ; le nom en Lobster comme la marque, et un cœur
+   qui bat doucement. Blanc sur #d82a5f : 4,8:1. */
 .don-banner {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.75rem;
   width: 100%;
-  margin: 1.2rem 0 0.2rem;
-  padding: 1.05rem 1.1rem;
+  margin: 1.1rem 0 0.3rem;
+  padding: 0.85rem 0.95rem;
   border: none;
-  border-radius: 14px;
-  background: var(--mask-yellow);
-  color: var(--studio-ink);
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 700;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 70% -40%, rgba(255, 214, 102, 0.4), transparent 50%),
+    linear-gradient(120deg, #f04b2f 0%, #e5365a 55%, #c81f6b 100%);
+  color: #fff;
+  /* ⚠ Un bouton n'hérite pas de la police de la page. */
+  font-family: 'Poppins', system-ui, sans-serif;
   text-align: left;
   cursor: pointer;
   overflow: hidden;
+  box-shadow: 0 8px 20px rgba(200, 31, 107, 0.32);
+  transition: transform 0.15s ease;
 }
-.don-banner > svg { width: 30px; height: 30px; fill: currentColor; flex: 0 0 auto; }
-.don-banner__texte { flex: 1 1 auto; }
-/* Le chevron des autres lignes, dans une pastille blanche. Le coin bleu en
-   biais a été retiré : il alourdissait sans rien dire. */
+.don-banner:active { transform: scale(0.98); }
+.don-banner__coeur {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fff;
+  color: #e5365a;
+}
+.don-banner__coeur svg {
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+  animation: don-battement 1.6s ease-in-out infinite;
+}
+@keyframes don-battement {
+  0%, 60%, 100% { transform: scale(1); }
+  15% { transform: scale(1.18); }
+  30% { transform: scale(1); }
+  45% { transform: scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .don-banner__coeur svg { animation: none; }
+}
+.don-banner__texte { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; }
+.don-banner__titre {
+  font-family: 'Lobster', var(--font-display);
+  font-size: 1.85rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+.don-banner__sous-titre {
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.95;
+}
+/* Le chevron des autres lignes, dans une pastille blanche. */
 .don-banner__fleche {
   display: inline-flex;
   align-items: center;
@@ -1024,8 +1064,8 @@ a.settings-row .settings-row__label { word-break: break-all; }
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #fff;
-  color: var(--studio-blue);
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
   flex: 0 0 auto;
 }
 .don-banner__fleche svg { width: 17px; height: 17px; }
@@ -1510,6 +1550,48 @@ a.settings-row .settings-row__label { word-break: break-all; }
 /* Source de 288 px : à 170 px d'affichage, 1,7x — net sur écran fin. */
 .illu__img { display: block; width: min(170px, 44vw); height: auto; }
 .support-text--centre { text-align: center; }
+
+/* --- Faire un don, sur fond bleu (05/11/2026) ----------------------------- */
+/* Le bleu descend jusque sous la barre d'onglets : sinon une bande crème
+   apparaissait en bas de page. */
+.page--studio-don { padding-bottom: 7rem; margin-bottom: -6rem; }
+.page--studio-don .illu { margin: 0.8rem 0 0.4rem; }
+.page--studio-don .don-banner { margin: 0.4rem 0 1rem; text-decoration: none; }
+.page--studio-don.page--studio-sub .page__subtitle {
+  margin: 0 0 0.6rem;
+  color: var(--mask-yellow);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+}
+.page--studio-don .support-card { border-radius: 18px; }
+/* Les remerciements : le titre en Lobster jaune, les noms en pastilles
+   blanches qui ressortent sur le bleu. */
+.page--studio-don .support-wall { margin-top: 1.6rem; }
+.page--studio-don .support-wall .support-wall__title {
+  margin: 0 0 0.7rem;
+  color: var(--mask-yellow);
+  font-family: 'Lobster', var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 400;
+  line-height: 1.15;
+}
+.page--studio-don .support-badge {
+  border: none;
+  background: #fff;
+  color: var(--studio-ink);
+  box-shadow: 0 4px 12px rgba(4, 30, 80, 0.25);
+}
+.page--studio-don .support-badge__since { color: rgba(6, 43, 29, 0.6); }
+.page--studio-don .support-empty {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.page--studio-don .support-thanks { color: rgba(255, 255, 255, 0.9); }
+.page--studio-don .support-wall__title + .form__hint { color: #fff; }
 
 /* --- Connexion : le logo accueille, le formulaire suit ------------------- */
 /* Source de 288 px pour 150 px affichés : net même sur un écran à double

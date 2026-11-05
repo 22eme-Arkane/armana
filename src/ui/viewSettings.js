@@ -21,6 +21,26 @@ export async function viewSettings() {
 
   const logged = isLoggedIn()
 
+  // Le don, EN TÊTE de page (demande de Matthieu, 05/11/2026) : c'est ce qui
+  // fait vivre le projet. Placé en bas, entre deux groupes de réglages, il
+  // passait inaperçu, et son jaune uni le rendait triste.
+  const don = el('button', 'don-banner')
+  don.type = 'button'
+  const coeur = el('span', 'don-banner__coeur')
+  coeur.appendChild(icon('heart'))
+  const textes = el('span', 'don-banner__texte')
+  textes.append(
+    el('strong', 'don-banner__titre', 'Faire un don'),
+    el('span', 'don-banner__sous-titre', 'Armana vit grâce à vous')
+  )
+  // Le MÊME chevron que les autres lignes : une flèche différente ici donnait
+  // l'impression d'un bouton d'une autre nature.
+  const rond = el('span', 'don-banner__fleche')
+  rond.appendChild(icon('chevronRight'))
+  don.append(coeur, textes, rond)
+  don.addEventListener('click', () => navigate('/soutenir'))
+  wrap.appendChild(don)
+
   // --- Groupe 1 : créer et gérer ---
   // « Mes départements » est un filtre de lecture : il reste utile sans compte,
   // d'où un groupe visible même déconnecté (mais sans les lignes de publication,
@@ -116,21 +136,7 @@ export async function viewSettings() {
   install.appendChild(rowNav(icon('bell'), 'Notifications', '/notifications'))
   wrap.appendChild(install)
 
-  // 4. Le don, en bannière pleine largeur : c'est ce qui fait vivre le projet,
-  //    il ne doit pas se perdre au milieu d'une liste de réglages.
-  const don = el('button', 'don-banner')
-  don.type = 'button'
-  don.appendChild(icon('heart'))
-  don.appendChild(el('span', 'don-banner__texte', 'Faire un don'))
-  // Le MÊME chevron que les autres lignes : une flèche différente ici donnait
-  // l'impression d'un bouton d'une autre nature.
-  const rond = el('span', 'don-banner__fleche')
-  rond.appendChild(icon('chevronRight'))
-  don.appendChild(rond)
-  don.addEventListener('click', () => navigate('/soutenir'))
-  wrap.appendChild(don)
-
-  // 5. Assistance.
+  // 4. Assistance.
   wrap.appendChild(ruban('Assistance', 'vert'))
   const help = el('div', 'settings-group settings-group--vert')
   help.appendChild(rowNav(icon('message'), 'Nous contacter', '/contact'))

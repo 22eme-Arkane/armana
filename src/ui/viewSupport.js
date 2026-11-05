@@ -34,7 +34,9 @@ function embleme(nom, rang) {
 }
 
 export async function viewSupport() {
-  const wrap = el('section', 'page page--studio-sub')
+  // Fond bleu, comme la connexion (refonte du 05/11/2026) : le bouton juste
+  // sous l'illustration, puis les explications, puis les remerciements.
+  const wrap = el('section', 'page page--studio-sub page--studio-blue page--studio-don')
   wrap.appendChild(studioHeader('Faire un don', { backTo: '/parametres' }))
 
   // L'illustration fournie par Matthieu (assets/Faire un Don.png), recadrée et
@@ -47,6 +49,24 @@ export async function viewSupport() {
   imgDon.alt = 'Un cœur tenu à deux mains'
   illu.appendChild(imgDon)
   wrap.appendChild(illu)
+
+  // Le même bouton que dans le Profil (.don-banner, style.css) : on retrouve
+  // ce qu'on vient de toucher, et il est visible sans faire défiler.
+  const btn = el('a', 'don-banner')
+  btn.href = PAYPAL_URL
+  btn.target = '_blank'
+  btn.rel = 'noopener noreferrer'
+  const coeur = el('span', 'don-banner__coeur')
+  coeur.appendChild(icon('heart'))
+  const textes = el('span', 'don-banner__texte')
+  textes.append(
+    el('strong', 'don-banner__titre', 'Faire un don'),
+    el('span', 'don-banner__sous-titre', 'PayPal ou carte bancaire')
+  )
+  const rond = el('span', 'don-banner__fleche')
+  rond.appendChild(icon('chevronRight'))
+  btn.append(coeur, textes, rond)
+  wrap.appendChild(btn)
 
   // ⚠ Explications COMPLÈTES, volontairement. J'avais coupé au plus court ;
   // Matthieu l'a corrigé : c'est justement l'endroit où les gens ont besoin de
@@ -80,22 +100,6 @@ export async function viewSupport() {
   )
   wrap.appendChild(card)
 
-  const btn = el('a', 'btn btn--primary btn--block support-btn')
-  btn.href = PAYPAL_URL
-  btn.target = '_blank'
-  btn.rel = 'noopener noreferrer'
-  btn.appendChild(icon('heart'))
-  btn.appendChild(document.createTextNode(' Faire un don'))
-  wrap.appendChild(btn)
-
-  wrap.appendChild(
-    el(
-      'p',
-      'form__hint support-text--centre',
-      'Paiement via PayPal · Carte bancaire acceptée sans compte.'
-    )
-  )
-
   // --- Mur des soutiens ----------------------------------------------------
   const wall = el('div', 'support-wall')
   wrap.appendChild(wall)
@@ -122,7 +126,7 @@ export async function viewSupport() {
 async function renderWall(wall) {
   wall.innerHTML = ''
   wall.appendChild(
-    el('h2', 'support-wall__title', '💛 Merci à celles et ceux qui ont fait un don à Armana')
+    el('h2', 'support-wall__title', 'Merci à celles et ceux qui ont fait un don')
   )
 
   let list = []
