@@ -1,5 +1,12 @@
 <p align="center">
-  <img src="public/icons/armana-logo-grand.png" alt="Armana" width="160" />
+  <a href="https://armana.app">
+    <img src="medias/github/social-preview-github-1280x640.png" alt="Armana — l'agenda culturel partagé, partout en France" width="100%" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://armana.app"><strong>armana.app</strong></a> ·
+  Calendrier · Carte · Publication d'événements · Favoris · Food trucks
 </p>
 
 # Armana
@@ -22,10 +29,10 @@ lancement). Les inscrits publient un événement et « **Gemment** » leurs favo
 | Couche      | Choix                                                        |
 |-------------|-------------------------------------------------------------|
 | Front       | PWA — Vite + JavaScript vanilla, manifest + service worker  |
-| Carte       | Leaflet + tuiles OpenStreetMap (sans clé, sans abonnement)  |
+| Carte       | Leaflet + fond maison MapLibre, tuiles vectorielles OpenFreeMap (sans clé, sans abonnement) |
 | Backend     | Supabase (Postgres + PostGIS + Auth + Storage) — projet dédié |
-| Recherche   | PostGIS `ST_DWithin` sur `geography(Point,4326)`            |
-| Déploiement | Cloudflare Pages                                            |
+| Territoire  | Contours Etalab par région ; département de chaque événement calculé en base (PostGIS) |
+| Déploiement | Vercel (build statique Vite)                                |
 
 ---
 
