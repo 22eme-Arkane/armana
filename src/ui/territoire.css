@@ -1,0 +1,42 @@
+/* Armana — « Mon territoire » sur fond bleu (refonte du 07/11/2026). */
+.page--studio-territoire { padding-bottom: 7rem; margin-bottom: -6rem; }
+.page--studio-territoire .carte-depts { margin: 0.9rem 0 0.2rem; }
+/* La France entière : la vignette prend toute la largeur, sans plafond. */
+.page--studio-territoire .carte-depts__svg { max-height: none; height: auto; }
+.page--studio-territoire .carte-depts__dept {
+  fill: rgba(255, 255, 255, 0.16);
+  stroke: rgba(11, 85, 197, 0.9);
+  stroke-width: 0.025;
+  transition: fill 0.2s ease;
+}
+.page--studio-territoire .carte-depts__dept.is-active { fill: var(--mask-yellow); }
+.page--studio-territoire .carte-depts__dept.is-clickable:hover { fill: rgba(255, 255, 255, 0.35); }
+.page--studio-territoire .carte-depts__dept.is-active.is-clickable:hover { fill: #ffe066; }
+
+.territoire__aide {
+  margin: 0 0 0.3rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.territoire__resume {
+  margin: 0 0 1.2rem;
+  color: var(--mask-yellow);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+}
+.territoire__titre {
+  margin: 0 0 0.6rem;
+  color: var(--mask-yellow);
+  font-family: 'Lobster', var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  text-align: center;
+}
+/* Les blocs de régions : cartes blanches qui ressortent sur le bleu. */
+.page--studio-territoire .par-region__bloc { border: none; box-shadow: 0 4px 12px rgba(4, 30, 80, 0.25); }
+.page--studio-territoire .par-region__bloc.is-choisie { box-shadow: 0 0 0 3px var(--mask-yellow), 0 4px 12px rgba(4, 30, 80, 0.25); }
+.page--studio-territoire .par-region__tete { color: var(--studio-ink); }

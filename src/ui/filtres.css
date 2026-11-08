@@ -1,0 +1,69 @@
+/* Armana — panneau de filtres : des blocs à bandeau coloré (08/11/2026). */
+.feuille .feuille__corps { background: var(--studio-cream, #fff4df); padding-top: 0.4rem; }
+
+.filtre-bloc {
+  margin: 0 0 0.8rem;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(6, 43, 29, 0.1);
+}
+.filtre-bloc__bandeau {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.55rem 0.9rem;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.filtre-bloc__bandeau svg { width: 19px; height: 19px; flex: 0 0 auto; }
+.filtre-bloc__picto { width: 19px; text-align: center; font-size: 1.1rem; }
+.filtre-bloc--bleu .filtre-bloc__bandeau { background: var(--studio-blue, #0b55c5); }
+.filtre-bloc--rouge .filtre-bloc__bandeau { background: var(--studio-red, #f04b2f); }
+.filtre-bloc--jaune .filtre-bloc__bandeau { background: var(--mask-yellow, #f4ca15); color: var(--studio-ink, #062b1d); }
+.filtre-bloc--vert .filtre-bloc__bandeau { background: var(--studio-green, #26784c); }
+.filtre-bloc__contenu { padding: 0.7rem 0.8rem 0.4rem; }
+.filtre-bloc__contenu .choix { margin-bottom: 0.4rem; }
+
+/* Pastilles cochées : la couleur du bloc, pour qu'on voie d'un coup d'œil
+   ce qui est retenu, et où. */
+.filtre-bloc--bleu .choix__option.is-active { background: var(--studio-blue, #0b55c5); border-color: var(--studio-blue, #0b55c5); color: #fff; }
+.filtre-bloc--rouge .choix__option.is-active { background: var(--studio-red, #f04b2f); border-color: var(--studio-red, #f04b2f); color: #fff; }
+.filtre-bloc--jaune .choix__option.is-active { background: var(--mask-yellow, #f4ca15); border-color: var(--mask-yellow, #f4ca15); color: var(--studio-ink, #062b1d); }
+.filtre-bloc--vert .choix__option.is-active { background: var(--studio-green, #26784c); border-color: var(--studio-green, #26784c); color: #fff; }
+
+/* La carte de France, sur le bleu d'Armana comme dans Mon territoire. */
+.filtre-carte {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem;
+  border-radius: 14px;
+  background: var(--studio-blue, #0b55c5);
+}
+.filtre-carte .carte-depts__svg { max-height: 260px; margin: 0 auto; }
+.filtre-carte .carte-depts__dept {
+  fill: rgba(255, 255, 255, 0.16);
+  stroke: rgba(11, 85, 197, 0.9);
+  stroke-width: 0.025;
+}
+.filtre-carte .carte-depts__dept.is-active { fill: var(--mask-yellow, #f4ca15); }
+.filtre-bloc__resume {
+  margin: 0 0 0.3rem;
+  color: var(--studio-blue, #0b55c5);
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.filtre-affiner { margin: 0.2rem 0 0.4rem; }
+.filtre-affiner > summary {
+  padding: 0.45rem 0;
+  color: var(--studio-blue, #0b55c5);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.filtre-affiner .par-region { margin-top: 0.4rem; }

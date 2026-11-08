@@ -1,59 +1,58 @@
-// Armana — écran « Mes départements » (Profil).
+// Armana — écran « Mon territoire » (Profil).
 //
 // Filtre de territoire : il agit à la fois sur l'agenda et sur la carte. Un
 // département décoché disparaît des deux — sur la carte, il repasse même sous
 // le masque, comme s'il n'était pas couvert.
 //
 // Préférence locale à l'appareil, pas au compte : quelqu'un peut vouloir voir
-// les trois départements sur son ordinateur et seulement le sien sur son
+// toute sa région sur son ordinateur et seulement son département sur son
 // téléphone.
-import { el, loginPrompt, toggleRow } from './components.js'
+//
+// ⚠ DEPUIS L'OUVERTURE À LA FRANCE (07/11/2026), OUVERT À TOUS, compte ou
+// non : un visiteur de Bretagne doit pouvoir quitter PACA sans s'inscrire.
+// Les départements sont rangés par région (ui/parRegion.js).
+import { el, toggleRow } from './components.js'
 import { icon } from './icons.js'
 import { studioHeader } from './studio.js'
+import { listeParRegion } from './parRegion.js'
 import { isAdmin, isLoggedIn } from '../lib/auth.js'
 import { amIOwner } from '../lib/admins.js'
-import { DEPARTEMENTS, nomDepartement } from '../lib/departements.js'
+import {
+  DEPARTEMENTS,
+  deptsDeRegion,
+  nomDepartement,
+  regionDuDept,
+  resumeTerritoire,
+} from '../lib/departements.js'
+import { carteDepartements } from './carteDepts.js'
+import './territoire.css'
 import { getMesDepartements, setMesDepartements } from '../lib/mesDepartements.js'
 import { applyModerator, myModDepts, myModeratorRequest } from '../lib/moderation.js'
 
 export async function viewDepartements() {
-  const wrap = el('section', 'page page--studio-sub')
-  wrap.appendChild(studioHeader('Mes départements', { backTo: '/parametres' }))
-
-  wrap.appendChild(
-    el(
-      'p',
-      'page__subtitle',
-      'Choisissez les départements dont vous voulez voir les événements. ' +
-        'Le choix s’applique à l’agenda comme à la carte.'
-    )
-  )
-
-  // ⚠ Choisir son territoire demande désormais un compte (décision de
-  // Matthieu). L'explication reste visible AVANT l'invitation : on doit
-  // comprendre ce qu'on gagne à s'inscrire. Sans compte, l'agenda et la carte
-  // continuent d'afficher tout le territoire — rien n'est caché, c'est le
-  // réglage qui est réservé.
-  if (!isLoggedIn()) {
-    wrap.appendChild(
-      el(
-        'p',
-        'form__hint',
-        'En attendant, l’agenda et la carte vous montrent l’ensemble du ' +
-          'territoire couvert : ' +
-          DEPARTEMENTS.map((d) => `${d.code} ${d.nom}`).join(', ') + '.'
-      )
-    )
-    wrap.appendChild(
-      loginPrompt('Créez votre compte pour choisir les départements que vous suivez.')
-    )
-    return wrap
-  }
+  // Refonte du 07/11/2026, dans l'esprit de « Faire un don » : fond bleu, une
+  // CARTE DE FRANCE où l'on touche une région pour l'ajouter ou la retirer,
+  // puis le détail par département pour qui veut affiner.
+  const wrap = el('section', 'page page--studio-sub page--studio-blue page--studio-territoire')
+  wrap.appendChild(studioHeader('Mon territoire', { backTo: '/parametres' }))
 
   let choisis = getMesDepartements()
-  const groupe = el('div', 'settings-group')
-  const message = el('p', 'form__hint')
+  const message = el('p', 'territoire__resume')
   const cases = new Map()
+
+  // La carte : un département touché bascule TOUTE sa région — c'est la
+  // région qu'on choisit d'un geste ; le détail se règle dans la liste.
+  const carte = carteDepartements({
+    selection: choisis,
+    onPick: (code) => {
+      const siens = deptsDeRegion(regionDuDept(code))
+      const tous = siens.every((c) => choisis.includes(c))
+      enregistrer(tous ? choisis.filter((c) => !siens.includes(c)) : [...choisis, ...siens])
+    },
+  })
+  wrap.appendChild(carte)
+  wrap.appendChild(el('p', 'territoire__aide', 'Touchez une région pour l’ajouter ou la retirer.'))
+  wrap.appendChild(message)
 
   /** Le dernier département coché ne peut pas être décoché. */
   function majVerrous() {
@@ -65,34 +64,41 @@ export async function viewDepartements() {
     }
     message.textContent = seul
       ? 'Au moins un département doit rester affiché.'
-      : `${choisis.length} départements affichés.`
+      : `Affiché : ${resumeTerritoire(choisis)}.`
   }
 
-  for (const d of DEPARTEMENTS) {
+  function enregistrer(prochain) {
+    choisis = setMesDepartements(prochain)
+    // On resynchronise les cases sur ce que le stockage a réellement retenu,
+    // plutôt que sur ce que l'on croit avoir enregistré.
+    for (const [code, e] of cases) e.toggle.checked = choisis.includes(code)
+    liste.repeindre()
+    carte.setSelection(choisis)
+    majVerrous()
+  }
+
+  const liste = listeParRegion({
+    selection: () => choisis,
+    // « Toute la région » : on ajoute ses départements, ou on les retire tous
+    // — sauf s'il n'en resterait aucun ailleurs (setMesDepartements refuse).
+    basculerRegion: (codes, tous) =>
+      enregistrer(tous ? [...choisis, ...codes] : choisis.filter((c) => !codes.includes(c))),
     // Le numéro en gros chiffres condensés à gauche, comme la maquette : c'est
     // lui qu'on cherche du regard, pas le nom complet.
-    const ligne = toggleRow(d.nom, {
-      prefix: el('span', 'dept-num', d.code),
-      actif: choisis.includes(d.code),
-      onChange: (veut) => {
-        choisis = veut
-          ? [...new Set([...choisis, d.code])]
-          : choisis.filter((c) => c !== d.code)
-        choisis = setMesDepartements(choisis)
-        // On resynchronise les cases sur ce que le stockage a réellement
-        // retenu, plutôt que sur ce que l'on croit avoir enregistré.
-        for (const [code, e] of cases) e.toggle.checked = choisis.includes(code)
-        majVerrous()
-      },
-    })
-    const toggle = ligne.input
+    rendre: (d) => {
+      const ligne = toggleRow(d.nom, {
+        prefix: el('span', 'dept-num', d.code),
+        actif: choisis.includes(d.code),
+        onChange: (veut) =>
+          enregistrer(veut ? [...choisis, d.code] : choisis.filter((c) => c !== d.code)),
+      })
+      cases.set(d.code, { toggle: ligne.input, ligne })
+      return ligne
+    },
+  })
 
-    cases.set(d.code, { toggle, ligne })
-    groupe.appendChild(ligne)
-  }
-
-  wrap.appendChild(groupe)
-  wrap.appendChild(message)
+  wrap.appendChild(el('h3', 'territoire__titre', 'Affiner par département'))
+  wrap.appendChild(liste)
   majVerrous()
 
   wrap.appendChild(
@@ -147,14 +153,24 @@ export async function viewDepartements() {
     wrap.appendChild(
       el('p', 'form__label', 'Demander un département de plus')
     )
-    const groupe = el('div', 'settings-group')
     const cases = []
-    for (const d of restants) {
-      const ligne = toggleRow(d.nom, { prefix: el('span', 'dept-num', d.code) })
-      ligne.input.dataset.code = d.code
-      groupe.appendChild(ligne)
-      cases.push(ligne.input)
-    }
+    const lus = () => cases.filter((c) => c.checked).map((c) => c.dataset.code)
+    const groupe = listeParRegion({
+      codes: restants.map((d) => d.code),
+      selection: lus,
+      // Seules les régions de sa zone actuelle sont dépliées : on étend le
+      // plus souvent chez ses voisins.
+      ouvertes: [...new Set(zone.map((c) => DEPARTEMENTS.find((d) => d.code === c)?.region))],
+      rendre: (d) => {
+        const ligne = toggleRow(d.nom, {
+          prefix: el('span', 'dept-num', d.code),
+          onChange: () => groupe.repeindre(),
+        })
+        ligne.input.dataset.code = d.code
+        cases.push(ligne.input)
+        return ligne
+      },
+    })
     wrap.appendChild(groupe)
 
     const msg = el('p', 'form__msg')
@@ -163,7 +179,7 @@ export async function viewDepartements() {
     demander.appendChild(icon('shield'))
     demander.appendChild(document.createTextNode(' Demander l’extension'))
     demander.addEventListener('click', async () => {
-      const depts = cases.filter((c) => c.checked).map((c) => c.dataset.code)
+      const depts = lus()
       msg.className = 'form__msg'
       if (!depts.length) {
         msg.classList.add('form__msg--err')

@@ -8,8 +8,10 @@ import { icon } from './icons.js'
 import { studioHeader } from './studio.js'
 import { navigate } from '../lib/router.js'
 import { isAdmin, isLoggedIn } from '../lib/auth.js'
-import { DEPARTEMENTS } from '../lib/departements.js'
+import { deptsDeRegion, regionsDe } from '../lib/departements.js'
+import { getMesDepartements } from '../lib/mesDepartements.js'
 import { carteDepartements } from './carteDepts.js'
+import { listeParRegion } from './parRegion.js'
 import { applyModerator, myModeratorRequest } from '../lib/moderation.js'
 
 const QUAND = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' })
@@ -26,13 +28,13 @@ export async function viewBecomeModerator() {
         'p',
         'page__subtitle',
         'Vous êtes déjà modérateur ou modératrice. Pour élargir votre zone à un ' +
-          'autre département, passez par « Mes départements ».'
+          'autre département, passez par « Mon territoire ».'
       )
     )
     const aller = el('button', 'btn btn--primary btn--block')
     aller.type = 'button'
     aller.appendChild(icon('map'))
-    aller.appendChild(document.createTextNode(' Ouvrir Mes départements'))
+    aller.appendChild(document.createTextNode(' Ouvrir Mon territoire'))
     aller.addEventListener('click', () => navigate('/mes-departements'))
     wrap.appendChild(aller)
     return wrap
@@ -134,27 +136,38 @@ export async function viewBecomeModerator() {
 
   // La carte se met à jour à chaque bascule : on voit tout de suite la zone
   // qu'on propose de couvrir, ce qu'une liste de cases ne montre pas.
+  // ⚠ Depuis l'ouverture à la France, la vignette ne dessine que les régions
+  // du territoire suivi : la France entière en 190 px ne montrerait rien.
+  const sesRegions = regionsDe(getMesDepartements())
   const vignette = carteDepartements({
     selection: [],
+    codes: sesRegions.flatMap(deptsDeRegion),
     onPick: (code) => {
       const c = cases.find((x) => x.dataset.code === code)
       if (c) {
         c.checked = !c.checked
-        vignette.setSelection(lus())
+        peindre()
       }
     },
   })
   wrap.appendChild(vignette)
 
-  const rangs = el('div', 'settings-group')
-  for (const d of DEPARTEMENTS) {
-    const ligne = toggleRow(d.nom, {
-      prefix: el('span', 'dept-num', d.code),
-      onChange: () => vignette.setSelection(lus()),
-    })
-    ligne.input.dataset.code = d.code
-    rangs.appendChild(ligne)
-    cases.push(ligne.input)
+  const rangs = listeParRegion({
+    selection: lus,
+    ouvertes: sesRegions,
+    rendre: (d) => {
+      const ligne = toggleRow(d.nom, {
+        prefix: el('span', 'dept-num', d.code),
+        onChange: () => peindre(),
+      })
+      ligne.input.dataset.code = d.code
+      cases.push(ligne.input)
+      return ligne
+    },
+  })
+  function peindre() {
+    vignette.setSelection(lus())
+    rangs.repeindre()
   }
   wrap.appendChild(rangs)
 

@@ -4,7 +4,10 @@
 // ce que vous choisissez »), pas une carte navigable. Un SVG statique construit
 // depuis les contours déjà embarqués coûte quelques millisecondes et rien de
 // plus, là où une seconde instance Leaflet chargerait des tuiles.
-import { DEPARTEMENTS, loadDepartements } from '../lib/departements.js'
+// ⚠ Dessinée depuis les contours ALLÉGÉS de toute la France (71 Ko) : les
+// contours complets d'une seule région pèsent davantage, et une vignette n'en
+// montre de toute façon pas le détail.
+import { CODES_DEPARTEMENTS, loadFranceAllegee } from '../lib/departements.js'
 
 const NS = 'http://www.w3.org/2000/svg'
 
@@ -21,13 +24,14 @@ function svgEl(tag, attrs = {}) {
  * @param {object} opts
  * @param {string[]} opts.selection  codes allumés au départ
  * @param {(code:string)=>void} [opts.onPick]  clic sur un département
+ * @param {string[]} [opts.codes]  départements dessinés (défaut : toute la France)
  */
-export function carteDepartements({ selection = [], onPick = null } = {}) {
+export function carteDepartements({ selection = [], onPick = null, codes = CODES_DEPARTEMENTS } = {}) {
   const hote = el()
   let courant = [...selection]
 
-  loadDepartements()
-    .then((geojson) => dessiner(hote, geojson, () => courant, onPick))
+  loadFranceAllegee()
+    .then((geojson) => dessiner(hote, geojson, () => courant, onPick, codes))
     .catch(() => {
       // Contours indisponibles (hors ligne au premier lancement) : la vignette
       // disparaît, le reste de l'écran continue de fonctionner. Une carte est
@@ -50,8 +54,9 @@ function el() {
   return d
 }
 
-function dessiner(hote, geojson, getSelection, onPick) {
-  const codes = DEPARTEMENTS.map((d) => d.code)
+function dessiner(hote, geojson, getSelection, onPick, codes) {
+  // Au-delà d'une région, les numéros se chevaucheraient : la carte seule.
+  const avecNumeros = codes.length <= 14
   const traits = []
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
 
@@ -103,6 +108,7 @@ function dessiner(hote, geojson, getSelection, onPick) {
       p.addEventListener('click', () => onPick(t.code))
     }
     svg.appendChild(p)
+    if (!avecNumeros) continue
     // Le numéro au centre du rectangle englobant du département : suffisant
     // pour se repérer, et sans le coût d'un vrai calcul de centroïde.
     const bb = boite(t.d)

@@ -12,7 +12,7 @@ import { studioHeader } from './studio.js'
 import { navigate } from '../lib/router.js'
 import { isLoggedIn } from '../lib/auth.js'
 import { DEFAULT_CENTER } from '../lib/geo.js'
-import { chargerCommunes, communeDansLeTexte, communeLaPlusProche } from '../lib/communes.js'
+import { chargerCommunesFrance, communeDansLeTexte, communeLaPlusProche } from '../lib/communes.js'
 import { getMaFiche } from '../lib/fiches.js'
 import { rechercheCommune } from './rechercheCommune.js'
 import { menuEditeur } from './menuEditeur.js'
@@ -730,7 +730,7 @@ export async function viewPublish({ query } = {}) {
   async function preRemplirLieu() {
     let communes
     try {
-      communes = await chargerCommunes()
+      communes = await chargerCommunesFrance()
     } catch {
       return
     }

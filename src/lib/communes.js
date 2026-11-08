@@ -1,31 +1,45 @@
-// Armana — les communes de la région, d'après la liste officielle
-// (public/data/communes-paca.json, tirée de geo.api.gouv.fr).
+// Armana — les communes, d'après la liste officielle (geo.api.gouv.fr).
 //
 // Sert à deux choses :
 //  - CHOISIR une commune au lieu de la taper (planning des food trucks,
 //    publication d'un événement) — pas de faute, pas de « 04300 » seul ;
 //  - RETROUVER la commune des événements publiés avant ce choix, dont
 //    l'adresse est un texte libre (code postal, nom, ou point sur la carte).
+//
+// ⚠ DEPUIS L'OUVERTURE À LA FRANCE : un fichier par région
+// (`public/data/communes/<région>.json`, 14 à 70 Ko compressés), et un fichier
+// national (`france.json`, 528 Ko) réservé à la RECHERCHE d'une commune — on
+// peut publier un événement partout, pas seulement chez soi.
+import { DONNEES_VERSION } from './departements.js'
 
-let promesse = null
-let liste = null
+const parFichier = new Map()
 
-/** [{nom, dept, cp, lat, lng, cle}] — chargé une fois, mis en cache. */
-export function chargerCommunes() {
-  promesse ??= fetch('/data/communes-paca.json')
-    .then((r) => {
-      if (!r.ok) throw new Error('liste des communes indisponible')
-      return r.json()
-    })
-    .then((brut) => {
-      liste = brut.map(([nom, dept, cp, lat, lng]) => ({ nom, dept, cp, lat, lng, cle: normaliser(nom) }))
-      return liste
-    })
-    .catch((e) => {
-      promesse = null // on retentera à la prochaine demande
-      throw e
-    })
-  return promesse
+function chargerFichier(nom) {
+  if (!parFichier.has(nom)) {
+    const p = fetch(`/data/communes/${nom}.json?v=${DONNEES_VERSION}`)
+      .then((r) => {
+        if (!r.ok) throw new Error('liste des communes indisponible')
+        return r.json()
+      })
+      .then((brut) => brut.map(([nom, dept, cp, lat, lng]) => ({ nom, dept, cp, lat, lng, cle: normaliser(nom) })))
+      .catch((e) => {
+        parFichier.delete(nom) // on retentera à la prochaine demande
+        throw e
+      })
+    parFichier.set(nom, p)
+  }
+  return parFichier.get(nom)
+}
+
+/** [{nom, dept, cp, lat, lng, cle}] des régions demandées — mis en cache. */
+export async function chargerCommunes(regions = []) {
+  const listes = await Promise.all(regions.map(chargerFichier))
+  return listes.flat()
+}
+
+/** Toutes les communes de France : pour CHERCHER une commune par son nom. */
+export function chargerCommunesFrance() {
+  return chargerFichier('france')
 }
 
 /** Sans accents, sans tirets ni apostrophes : « st-etienne » trouve « Saint-Étienne ». */
@@ -113,7 +127,8 @@ export function communeDansLeTexte(communes, texte, lat = null, lng = null) {
     })
     if (abregee) return abregee
   }
-  const cp = String(texte).match(/\b(0[4-6]|13|83|84)\d{3}\b/)?.[0]
+  // Tout code postal français (Corse comprise : 20xxx).
+  const cp = String(texte).match(/\b\d{5}\b/)?.[0]
   if (!cp) return null
   const memes = communes.filter((c) => c.cp === cp)
   if (memes.length <= 1 || !Number.isFinite(lat)) return memes[0] ?? null

@@ -54,7 +54,7 @@ export async function viewSettings() {
   pub.appendChild(rowNav(icon('plus'), 'Publier un événement', '/publier'))
   // « Mes événements », en revanche, n'aurait rien à montrer sans compte.
   if (logged) pub.appendChild(rowNav(icon('ticket'), 'Mes événements', '/mes-evenements'))
-  pub.appendChild(rowNav(icon('map'), 'Mes départements', '/mes-departements'))
+  pub.appendChild(rowNav(icon('map'), 'Mon territoire', '/mes-departements'))
   // Le nom n'était modifiable NULLE PART : saisi une fois à l'inscription, il
   // restait figé — une faute de frappe l'était à vie, et elle s'affichait sur
   // chaque événement publié. Rangé ici avec les autres réglages qui vous

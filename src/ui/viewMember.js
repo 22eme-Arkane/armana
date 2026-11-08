@@ -17,7 +17,7 @@ import { isAdmin, getUser } from '../lib/auth.js'
 import { amIOwner, deleteMember, getMemberProfile, listMemberEvents } from '../lib/admins.js'
 import { setModerator } from '../lib/moderation.js'
 import { decideFiche } from '../lib/fiches.js'
-import { DEPARTEMENTS } from '../lib/departements.js'
+import { zoneParRegion } from './parRegion.js'
 import { copyText } from '../lib/share.js'
 import { avatarMembre, etiquetteType } from './typeCompte.js'
 
@@ -278,25 +278,15 @@ export async function viewMember({ query } = {}) {
  * l'écran Modérateurs, pas de bouton « Enregistrer » à oublier.
  */
 function zoneModeration(m, nom) {
-  const box = el('div', 'admin-zone')
   let depts = m.role === 'admin' ? [...(m.mod_depts ?? [])] : []
-  const boutons = new Map()
   const msg = el('p', 'form__msg')
-  const peindre = () => {
-    for (const [code, b] of boutons) b.classList.toggle('is-active', depts.includes(code))
-  }
+  // Rangée par région depuis l'ouverture à la France (ui/parRegion.js).
   // ⚠ Pendant l'enregistrement, TOUTES les pastilles sont gelées : deux touches
   // rapprochées partiraient chacune de l'état d'avant l'autre, et la seconde
   // écraserait la première (set_moderator remplace la zone entière).
-  const geler = (oui) => {
-    for (const b of boutons.values()) b.disabled = oui
-  }
-  for (const d of DEPARTEMENTS) {
-    const b = el('button', 'admin-zone__dept', d.code)
-    b.type = 'button'
-    b.title = d.nom
-    b.setAttribute('aria-label', d.nom)
-    b.addEventListener('click', async () => {
+  const box = zoneParRegion({
+    selection: () => depts,
+    onClic: async (d) => {
       const prochain = depts.includes(d.code) ? depts.filter((c) => c !== d.code) : [...depts, d.code]
       const question = !depts.length
         ? `${nom} : modérateur de ${prochain.join(', ')} ?\n\nIl pourra approuver, modifier et supprimer les événements de cette zone, et verra les statistiques.`
@@ -304,7 +294,7 @@ function zoneModeration(m, nom) {
           ? `Plus aucun département : retirer le rôle de modérateur à ${nom} ?`
           : null
       if (question && !confirm(question)) return
-      geler(true)
+      box.geler(true)
       msg.className = 'form__msg'
       msg.textContent = 'Enregistrement…'
       try {
@@ -314,19 +304,16 @@ function zoneModeration(m, nom) {
           return
         }
         depts = [...(res.mod_depts ?? [])]
-        peindre()
+        box.peindre()
         msg.textContent = ''
       } catch (e) {
         msg.className = 'form__msg form__msg--err'
         msg.textContent = e.message
       } finally {
-        geler(false)
+        box.geler(false)
       }
-    })
-    boutons.set(d.code, b)
-    box.appendChild(b)
-  }
-  peindre()
+    },
+  })
   const wrap = el('div')
   wrap.append(box, msg)
   return wrap

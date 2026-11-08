@@ -36,7 +36,8 @@ import { viewDepartements } from './ui/viewDepartements.js'
 import { viewBecomeModerator } from './ui/viewBecomeModerator.js'
 import { setSharedText, setSharedFile } from './lib/draft.js'
 import { recordAnonVisit, recordVisit, resetOwnerCache } from './lib/admins.js'
-import { getMesDepartements } from './lib/mesDepartements.js'
+import { getMesDepartements, territoireChoisi } from './lib/mesDepartements.js'
+import { ouvrirChoixRegion } from './ui/choixRegion.js'
 
 // --- Service worker (offline shell) ---
 // UNIQUEMENT en production : en dev, un SW "cache-first" servirait des modules
@@ -171,6 +172,10 @@ defineRoutes(
   }
 
   renderNav()
+
+  // Premier lancement depuis l'ouverture à la France : quelle région suivre ?
+  // L'écran se pose par-dessus ; la vue est redessinée une fois choisi.
+  if (!territoireChoisi()) ouvrirChoixRegion(() => refresh())
 
   // Fréquentation : une ligne par utilisateur et par jour (statistiques admin).
   // Volontairement sans await : purement statistique, jamais bloquant.

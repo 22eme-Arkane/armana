@@ -1,7 +1,7 @@
 {
   "name": "Armana",
   "short_name": "Armana",
-  "description": "L’agenda culturel du Sud-Est de la France : calendrier, carte et favoris.",
+  "description": "L’agenda culturel partagé, partout en France : calendrier, carte et favoris.",
   "lang": "fr",
   "start_url": "/",
   "scope": "/",

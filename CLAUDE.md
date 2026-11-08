@@ -8,13 +8,19 @@ l'utilisateur voit les événements culturels de sa région sur un **calendrier*
 **carte** interactive. Les inscrits publient des événements (photo, description,
 date(s), gratuit/payant + prix) et « **Gemment** » leurs favoris.
 
-**Territoire couvert : 04 (Alpes-de-Haute-Provence), 05 (Hautes-Alpes) et 84
-(Vaucluse).** Les contours officiels sont embarqués dans
-`public/data/departements.geojson` (jeu Etalab NON simplifié — deux départements
-voisins doivent partager exactement les mêmes sommets, sinon un liseré de masque
-apparaît entre eux). Chacun choisit les départements qu'il veut voir dans
-**Profil → Mes départements** ; le filtre agit sur l'agenda ET sur la carte, où un
-département décoché repasse sous le masque.
+**Territoire couvert : toute la France métropolitaine et la Corse** (96
+départements, 13 régions — ouverture du 07/11/2026, migration 0039 ; avant :
+PACA + Drôme). La liste vit dans `src/lib/territoire.js` (généré) et en base
+dans la table `departements`. Les contours officiels sont découpés par région
+dans `public/data/contours/<région>.geojson` (jeu Etalab NON simplifié — deux
+départements voisins doivent partager exactement les mêmes sommets, sinon un
+liseré de masque apparaît entre eux), plus `france-allege.geojson` pour
+localiser un point et dessiner les vignettes ; les communes dans
+`public/data/communes/`. Chacun choisit ses régions et départements dans
+**Profil → Mon territoire** (un appareil neuf choisit sa région au premier
+lancement) ; le filtre agit sur l'agenda ET sur la carte, où un département
+décoché repasse sous le masque. Les événements sont filtrés EN BASE par
+`events.dept`.
 
 > Le sélecteur de rayon (10/20/50 km) a été retiré : il ne faisait que cacher des
 > événements proches. Tout le territoire est chargé d'un coup.

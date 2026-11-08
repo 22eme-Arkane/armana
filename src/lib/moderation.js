@@ -38,6 +38,16 @@ export async function setModerator(id, depts) {
   return data?.[0] ?? null
 }
 
+/**
+ * Nombre de modérateurs par région (migration 0039) : Map code région → n.
+ * Le propriétaire n'est pas compté. Aucune identité, seulement des nombres.
+ */
+export async function moderateursParRegion() {
+  const { data, error } = await supabase.rpc('moderateurs_par_region')
+  if (error) throw error
+  return new Map((data ?? []).map((r) => [r.region, r.n]))
+}
+
 /** Postuler (ou, pour un modérateur, demander des départements en plus). */
 export async function applyModerator(depts, message) {
   const { data, error } = await supabase.rpc('apply_moderator', {

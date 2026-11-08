@@ -21,11 +21,6 @@ import {
 import { ouvrirFiltres } from './filtres.js'
 import './enteteAgenda.css'
 import { dayKey, eventDayKeys, isRecurring, recurrenceDaysLabel } from '../lib/recurrence.js'
-import {
-  CODES_DEPARTEMENTS,
-  estDansLeTerritoire,
-  loadDepartements,
-} from '../lib/departements.js'
 import { CATEGORIES, listApprovedEvents, listGemEventIds } from '../lib/events.js'
 
 // Les jours couverts par un événement (multi-jours ET récurrence) sont calculés
@@ -205,42 +200,36 @@ export async function viewCalendar() {
   wrap.appendChild(head)
 
   // --- Données ---
-  const [approvedEvents, gemIds, contours] = await Promise.all([
-    listApprovedEvents(),
-    isLoggedIn() ? listGemEventIds() : Promise.resolve(new Set()),
-    // Contours des départements, uniquement pour situer chaque événement.
-    // ⚠ Tolérant à l'échec : hors ligne ou fichier indisponible, on préfère
-    // afficher l'agenda entier plutôt qu'un agenda vide sans explication.
-    // ⚠ CHARGÉ SYSTÉMATIQUEMENT depuis le panneau de filtres : on ne sait
-    // plus d'avance si l'utilisateur va restreindre les départements en
-    // cours de route. Le fichier est en cache, la dépense est nulle.
-    loadDepartements().catch(() => null),
-  ])
+  // ⚠ DEPUIS L'OUVERTURE À LA FRANCE, LES DÉPARTEMENTS SONT FILTRÉS EN BASE
+  // (`events.dept`, calculé par trigger) : on ne télécharge que ceux affichés.
+  // Une retouche des départements dans le panneau relance donc le
+  // chargement — voir `rechargerSiBesoin`.
   const studioPreview = import.meta.env.DEV && new URLSearchParams(location.search).has('studio-preview')
-  const allEvents = studioPreview ? studioPreviewEvents(approvedEvents[0]) : approvedEvents
-  /** Filtres portant sur l'ÉVÉNEMENT lui-même (style, gratuité). */
-  const filtered = () => {
-    let events = appliquerFiltres(allEvents, tarifMode)
+  const cleDe = (codes) => [...codes].sort().join(',')
+  let cleChargee = cleDe(getDepartementsEffectifs())
+  const [approvedEvents, gemIds] = await Promise.all([
+    listApprovedEvents(getDepartementsEffectifs()),
+    isLoggedIn() ? listGemEventIds() : Promise.resolve(new Set()),
+  ])
+  let allEvents = studioPreview ? studioPreviewEvents(approvedEvents[0]) : approvedEvents
 
-    // Départements RÉELLEMENT appliqués : la retouche temporaire du panneau si
-    // elle existe, sinon le choix durable de Profil. Rien n'est filtré quand
-    // ils sont tous retenus — inutile de calculer.
-    const codes = getDepartementsEffectifs()
-    if (contours && codes.length < CODES_DEPARTEMENTS.length) {
-      events = events.filter((event) => {
-        const p = { lat: Number(event.lat), lng: Number(event.lng) }
-        // Un événement sans coordonnées ne peut pas être situé : on le garde
-        // plutôt que de le faire disparaître sans raison visible.
-        if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return true
-        return estDansLeTerritoire(p, contours, codes)
-      })
-    }
-
-    // ⚠ Le tarif est filtré par `appliquerFiltres`, et « Gratuit » y veut dire
-    // GRATUIT, pas « prix libre » : les deux ont `is_paid` à false, et
-    // `tarifMode` est le seul juge.
-    return events
+  /** Recharge les événements si les départements affichés ont changé. */
+  async function rechargerSiBesoin() {
+    const cle = cleDe(getDepartementsEffectifs())
+    if (cle === cleChargee || studioPreview) return false
+    cleChargee = cle
+    const frais = await listApprovedEvents(getDepartementsEffectifs()).catch(() => null)
+    // Une réponse arrivée après un autre changement est périmée : on l'ignore.
+    if (!frais || cle !== cleChargee) return false
+    allEvents = frais
+    return true
   }
+
+  /** Filtres portant sur l'ÉVÉNEMENT lui-même (style, gratuité). */
+  // ⚠ Le tarif est filtré par `appliquerFiltres`, et « Gratuit » y veut dire
+  // GRATUIT, pas « prix libre » : les deux ont `is_paid` à false, et
+  // `tarifMode` est le seul juge.
+  const filtered = () => appliquerFiltres(allEvents, tarifMode)
 
   /** Filtres portant sur le JOUR — appliqués aux occurrences, pas aux événements. */
   // Calcul partagé avec la Carte (lib/filter.js), dimanche compris.
@@ -409,6 +398,8 @@ export async function viewCalendar() {
   const desabonner = onFilterChange(() => {
     if (!wrap.isConnected) return desabonner()
     toutRedessiner()
+    // Départements retouchés : nouvelle requête, puis on redessine.
+    rechargerSiBesoin().then((change) => change && wrap.isConnected && toutRedessiner())
   })
 
   function repaintList() {

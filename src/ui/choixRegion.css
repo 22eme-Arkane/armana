@@ -1,0 +1,65 @@
+/* Armana — premier lancement : choix de la région (ui/choixRegion.js). */
+.choix-region {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  overflow-y: auto;
+  padding: 1.2rem 1rem 2rem;
+  background: var(--studio-blue, #0b55c5);
+  color: #fff;
+}
+.choix-region__carte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 460px;
+  margin: 0 auto;
+  text-align: center;
+}
+.choix-region__logo { width: 92px; height: auto; margin: 0.4rem 0 0.2rem; }
+.choix-region__titre {
+  margin: 0;
+  font-family: 'Lobster', var(--font-display);
+  font-size: 2.3rem;
+  font-weight: 400;
+}
+.choix-region__texte { margin: 0.4rem 0 1rem; font-size: 0.95rem; line-height: 1.45; }
+.choix-region__localiser {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.4rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--mask-yellow, #f4ca15);
+  color: var(--studio-ink, #062b1d);
+  font: inherit;
+  font-weight: 800;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.choix-region__localiser svg { width: 18px; height: 18px; }
+.choix-region__msg { min-height: 1.3rem; margin: 0.5rem 0 0.6rem; font-size: 0.85rem; }
+.choix-region__liste {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  width: 100%;
+}
+.choix-region__region {
+  padding: 0.75rem 0.6rem;
+  border: none;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--studio-ink, #062b1d);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+/* Invitation à modérer, après l'inscription (ui/appelModerateurs.js). */
+.appel-moderateurs > .feuille__titre { padding: 1.1rem 1rem 0; font-family: 'Lobster', var(--font-display); font-weight: 400; font-size: 1.7rem; }
+.appel-moderateurs__texte { margin: 0.5rem 0 0.9rem; padding: 0 1rem; font-size: 0.92rem; line-height: 1.5; color: var(--studio-ink, #062b1d); }
+
+.choix-region__aide { margin: 1rem 0 0; font-size: 0.8rem; line-height: 1.45; opacity: 0.9; }

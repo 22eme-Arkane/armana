@@ -1,0 +1,109 @@
+/* Armana — bulle d'un événement sur la carte : une mini-fiche (07/11/2026). */
+
+/* Sous la carte, le bleu du dehors : pendant que le fond se prépare, on voit
+   du bleu Armana, jamais un gris ni le monde entier. */
+.screen--studio-map .leaflet-container { background: #0b55c5; }
+.leaflet-popup.bulle-armana .leaflet-popup-content-wrapper {
+  overflow: hidden;
+  padding: 0;
+  border-radius: 18px;
+  background: var(--studio-cream, #fff4df);
+  box-shadow: 0 10px 28px rgba(6, 43, 29, 0.28);
+}
+.leaflet-popup.bulle-armana .leaflet-popup-content { width: 250px !important; margin: 0; }
+.leaflet-popup.bulle-armana .leaflet-popup-tip { background: var(--studio-cream, #fff4df); }
+/* La croix, en pastille blanche sur l'affiche. */
+.leaflet-popup.bulle-armana a.leaflet-popup-close-button {
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--studio-ink, #062b1d);
+  font: 700 18px/28px system-ui, sans-serif;
+  text-align: center;
+}
+
+.bulle { display: flex; flex-direction: column; }
+.bulle__affiche {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  background: #533377;
+  cursor: pointer;
+}
+.bulle__affiche img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bulle__affiche--vide {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #533377 0%, #0b55c5 100%);
+}
+.bulle__masques { font-size: 2.6rem; }
+.bulle__cat {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  background: var(--mask-yellow, #f4ca15);
+  color: var(--studio-ink, #062b1d);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.bulle__corps { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.7rem 0.85rem 0.85rem; }
+.bulle__quand {
+  color: var(--studio-red, #f04b2f);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.bulle__titre {
+  color: var(--studio-ink, #062b1d);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.bulle__lieu {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.3rem;
+  color: var(--studio-green, #26784c);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.bulle__lieu svg { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 1px; }
+.bulle__badges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
+.bulle__badge {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--studio-green, #26784c);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.bulle__badge--payant { background: var(--studio-blue, #0b55c5); }
+.bulle__badge--libre { background: #6b3f8f; }
+.bulle__badge--food { background: var(--studio-red, #f04b2f); }
+.bulle__bouton {
+  margin-top: 0.45rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--studio-blue, #0b55c5);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.bulle__bouton:active { transform: scale(0.97); }

@@ -2,6 +2,7 @@
 import { el } from './components.js'
 import { navigate } from '../lib/router.js'
 import { studioHeader } from './studio.js'
+import { proposerModeration } from './appelModerateurs.js'
 import {
   signIn,
   signUp,
@@ -158,6 +159,9 @@ export function viewAuth() {
           msg.textContent = 'Compte créé. Vérifiez votre e-mail pour confirmer, puis connectez-vous.'
           return
         }
+        // Région qui manque de modérateurs : on le propose tout de suite
+        // (demande de Matthieu, ouverture à la France). Sans attendre.
+        proposerModeration()
         // Lieu ou food truck : on enchaîne directement sur la fiche.
         if (typeCompte !== 'particulier') {
           navigate('/ma-fiche')

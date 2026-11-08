@@ -5,7 +5,8 @@
 // en pastille avec « Changer ».
 import { el } from './components.js'
 import { icon } from './icons.js'
-import { chargerCommunes, rechercher } from '../lib/communes.js'
+import { chargerCommunesFrance, rechercher } from '../lib/communes.js'
+import { getMesDepartements } from '../lib/mesDepartements.js'
 
 /**
  * @param {{onChoix?:(c:object|null)=>void, invite?:string}} opts
@@ -60,14 +61,21 @@ export function rechercheCommune({ onChoix, invite } = {}) {
     if (input.value.trim().length < 2) return
     let communes
     try {
-      communes = await chargerCommunes()
+      communes = await chargerCommunesFrance()
     } catch (e) {
       liste.appendChild(el('p', 'form__hint', 'Liste des communes indisponible : ' + e.message))
       return
     }
-    const trouvees = rechercher(communes, input.value)
+    // Toute la France, mais SON territoire d'abord : « Saint-Martin » existe
+    // des dizaines de fois, celui d'à côté doit sortir en tête.
+    const miens = getMesDepartements()
+    const larges = rechercher(communes, input.value, 60)
+    const trouvees = [
+      ...larges.filter((c) => miens.includes(c.dept)),
+      ...larges.filter((c) => !miens.includes(c.dept)),
+    ].slice(0, 8)
     if (!trouvees.length) {
-      liste.appendChild(el('p', 'form__hint', 'Aucune commune de la région ne correspond.'))
+      liste.appendChild(el('p', 'form__hint', 'Aucune commune de France ne correspond.'))
       return
     }
     for (const c of trouvees) {

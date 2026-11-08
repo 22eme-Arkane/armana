@@ -4,11 +4,19 @@
 // même que la rangée de styles de l'en-tête. Deux états séparés finiraient par
 // se contredire, et la rangée mentirait sur ce qui est réellement filtré.
 import { el } from './components.js'
+import { icon } from './icons.js'
 import { ouvrirCalendrier } from './calendrier.js'
+import { carteDepartements } from './carteDepts.js'
 import { CATEGORIES } from '../lib/events.js'
-import { DEPARTEMENTS } from '../lib/departements.js'
+import { CODES_DEPARTEMENTS, deptsDeRegion, regionDuDept, resumeTerritoire } from '../lib/departements.js'
+import { listeParRegion } from './parRegion.js'
+import './filtres.css'
 import {
   basculerDepartement,
+  basculerRegion,
+  deptsRetouches,
+  garderCommeTerritoire,
+  revenirAuTerritoire,
   basculerStyle,
   basculerTarif,
   getQuand,
@@ -63,11 +71,27 @@ export function ouvrirFiltres(onChange) {
     onChange?.()
   }
 
-  /** Une section de pastilles à cocher. `estActif` et `basculer` font le lien. */
+  // ⚠ REFONTE DU 08/11/2026 (Matthieu : « ça manque vraiment de clarté »).
+  // Chaque section est un BLOC à bandeau de couleur et icône, au lieu d'un
+  // petit titre noir sur blanc. « Où » passe en tête, avec la CARTE de France
+  // de Mon territoire : on touche une région au lieu de déplier treize menus.
   const peintres = []
-  function section(titre, options, estActif, basculer, aide) {
-    corps.appendChild(el('h3', 'feuille__section', titre))
-    if (aide) corps.appendChild(el('p', 'feuille__aide', aide))
+
+  /** Un bloc : bandeau coloré (icône + titre), puis son contenu. */
+  function bloc(titre, picto, couleur, aide) {
+    const b = el('section', `filtre-bloc filtre-bloc--${couleur}`)
+    const bandeau = el('h3', 'filtre-bloc__bandeau')
+    bandeau.append(typeof picto === 'string' ? el('span', 'filtre-bloc__picto', picto) : picto, el('span', null, titre))
+    b.appendChild(bandeau)
+    const contenu = el('div', 'filtre-bloc__contenu')
+    if (aide) contenu.appendChild(el('p', 'feuille__aide', aide))
+    b.appendChild(contenu)
+    corps.appendChild(b)
+    return contenu
+  }
+
+  /** Une rangée de pastilles à cocher. `estActif` et `basculer` font le lien. */
+  function pastilles(contenu, options, estActif, basculer) {
     const rangee = el('div', 'choix')
     const boutons = options.map((o) => {
       const b = el('button', 'choix__option', o.texte)
@@ -79,40 +103,109 @@ export function ouvrirFiltres(onChange) {
       rangee.appendChild(b)
       return { b, cle: o.cle }
     })
-    corps.appendChild(rangee)
+    contenu.appendChild(rangee)
     peintres.push(() => {
       for (const { b, cle } of boutons) b.classList.toggle('is-active', estActif(cle))
     })
+    return rangee
   }
 
-  section(
-    'Styles',
-    CATEGORIES.map((c) => ({ cle: c, texte: c })),
-    (c) => getStyles().has(c),
-    (c) => basculerStyle(c),
-    'Plusieurs styles possibles. Aucun coché = tous les styles.'
+  // --- Où -------------------------------------------------------------------
+  // ⚠ ON NE TOUCHE PAS AU CHOIX DURABLE DEPUIS ICI. Regarder le 05 un soir ne
+  // doit pas réécrire Mon territoire : c'est une retouche provisoire, que
+  // « Tout afficher » et le prochain lancement effacent — sauf si l'on choisit
+  // explicitement de la garder.
+  const ou = bloc(
+    'Où',
+    icon('map'),
+    'bleu',
+    'Touchez une région pour l’ajouter ou la retirer. Provisoire : votre choix ' +
+      'habituel reste celui de Profil → Mon territoire.'
   )
+  const carte = carteDepartements({
+    selection: getDepartementsEffectifs(),
+    onPick: (code) => {
+      const siens = deptsDeRegion(regionDuDept(code))
+      const effectifs = getDepartementsEffectifs()
+      basculerRegion(siens, !siens.every((c) => effectifs.includes(c)))
+      majTout()
+    },
+  })
+  carte.classList.add('filtre-carte')
+  ou.appendChild(carte)
 
-  section(
-    'Tarif',
-    TARIFS,
-    (t) => getTarifs().has(t),
-    (t) => basculerTarif(t),
-    null
-  )
+  // « Mon territoire » : allumé tant qu'on regarde son réglage de Profil ; le
+  // toucher abandonne la retouche. « Toute la France » d'un geste. Et une
+  // retouche peut être GARDÉE : elle devient le territoire durable.
+  const monTerritoire = el('button', 'choix__option', 'Mon territoire')
+  monTerritoire.type = 'button'
+  monTerritoire.addEventListener('click', () => {
+    revenirAuTerritoire()
+    majTout()
+  })
+  const franceEntiere = el('button', 'choix__option filtres__france')
+  franceEntiere.type = 'button'
+  franceEntiere.addEventListener('click', () => {
+    const tout = getDepartementsEffectifs().length === CODES_DEPARTEMENTS.length
+    basculerRegion(CODES_DEPARTEMENTS, !tout)
+    majTout()
+  })
+  const rangeeFrance = el('div', 'choix')
+  rangeeFrance.append(monTerritoire, franceEntiere)
+  ou.appendChild(rangeeFrance)
+  const resume = el('p', 'filtre-bloc__resume')
+  ou.appendChild(resume)
+  const garder = el('button', 'btn btn--link filtres__garder', 'Garder ce choix comme mon territoire')
+  garder.type = 'button'
+  garder.addEventListener('click', () => {
+    garderCommeTerritoire()
+    majTout()
+  })
+  ou.appendChild(garder)
 
-  section(
-    'Quand',
-    QUAND,
-    (q) => getQuand() === q,
-    (q) => setQuand(q),
-    null
-  )
+  // Le détail par département, REPLIÉ : on y va pour affiner, pas d'emblée.
+  const affiner = el('details', 'filtre-affiner')
+  affiner.appendChild(el('summary', null, 'Affiner par département'))
+  const boutonsDepts = new Map()
+  const regions = listeParRegion({
+    pastilles: true,
+    selection: getDepartementsEffectifs,
+    ouvertes: [],
+    rendre: (d) => {
+      const b = el('button', 'choix__option', `${d.code} ${d.nom}`)
+      b.type = 'button'
+      b.addEventListener('click', () => {
+        basculerDepartement(d.code)
+        majTout()
+      })
+      boutonsDepts.set(d.code, b)
+      return b
+    },
+  })
+  affiner.appendChild(regions)
+  ou.appendChild(affiner)
 
-  // « Choisir une date » : ouvre le calendrier du téléphone, jamais un champ à
+  peintres.push(() => {
+    const effectifs = getDepartementsEffectifs()
+    const tout = effectifs.length === CODES_DEPARTEMENTS.length
+    const retouche = deptsRetouches()
+    carte.setSelection(effectifs)
+    franceEntiere.classList.toggle('is-active', tout && retouche)
+    franceEntiere.textContent = tout && retouche ? 'Toute la France ×' : 'Toute la France'
+    monTerritoire.classList.toggle('is-active', !retouche)
+    resume.textContent = resumeTerritoire(effectifs)
+    // ⚠ `style.display`, pas `hidden` : le `display` de `.btn` l'emporterait.
+    garder.style.display = retouche ? '' : 'none'
+    for (const [code, b] of boutonsDepts) b.classList.toggle('is-active', effectifs.includes(code))
+    regions.repeindre()
+  })
+
+  // --- Quand ----------------------------------------------------------------
+  const quand = bloc('Quand', icon('calendar'), 'rouge', null)
+  const rangeeQuand = pastilles(quand, QUAND, (q) => getQuand() === q, (q) => setQuand(q))
+  // « Choisir une date » : ouvre le calendrier d'Armana, jamais un champ à
   // taper. Une fois choisie, la pastille affiche le jour ; la toucher à
   // nouveau le relâche (même geste que les autres pastilles).
-  const rangeeQuand = corps.lastElementChild
   const choisirDate = el('button', 'choix__option', 'Choisir une date')
   choisirDate.type = 'button'
   choisirDate.addEventListener('click', () => {
@@ -132,20 +225,16 @@ export function ouvrirFiltres(onChange) {
     choisirDate.textContent = j ? libelleQuand() + ' ×' : 'Choisir une date'
   })
 
-  // ⚠ ON NE TOUCHE PAS AU CHOIX DURABLE DEPUIS ICI. Regarder le 05 un soir ne
-  // doit pas réécrire les départements réglés dans Profil : `basculerDepartement`
-  // pose une retouche temporaire, que « Tout afficher » et le prochain
-  // lancement effacent. Le texte d'aide le dit, sans quoi on croirait avoir
-  // changé son réglage pour de bon.
-  section(
-    'Départements',
-    DEPARTEMENTS.map((d) => ({ cle: d.code, texte: `${d.code} ${d.nom}` })),
-    (code) => getDepartementsEffectifs().includes(code),
-    (code) => basculerDepartement(code),
-    'Votre choix habituel vient de Profil → Mes départements. Une modification ' +
-      'faite ici est provisoire : elle ne change pas ce réglage et disparaît à ' +
-      'la prochaine ouverture.'
+  // --- Styles ---------------------------------------------------------------
+  pastilles(
+    bloc('Styles', icon('ticket'), 'jaune', 'Plusieurs styles possibles. Aucun coché = tous les styles.'),
+    CATEGORIES.map((c) => ({ cle: c, texte: c })),
+    (c) => getStyles().has(c),
+    (c) => basculerStyle(c)
   )
+
+  // --- Tarif ----------------------------------------------------------------
+  pastilles(bloc('Tarif', '€', 'vert', null), TARIFS, (t) => getTarifs().has(t), (t) => basculerTarif(t))
 
   const pied = el('div', 'feuille__pied')
   const raz = el('button', 'btn btn--ghost', 'Tout afficher')

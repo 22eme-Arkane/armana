@@ -10,6 +10,7 @@ import { makePhotoVariants } from './image.js'
 import { fichesPubliees } from './fiches.js'
 import { foodSurPlace } from './foodTrucks.js'
 import { chargerCommunes, villeDeLEvenement } from './communes.js'
+import { regionsDe } from './departements.js'
 
 export const CATEGORIES = [
   'Musique',
@@ -92,7 +93,8 @@ async function attachRelations(events) {
     // — y compris ceux publiés avant le choix de la commune (migration 0035).
     // En cache après le premier chargement ; sans elle, on retombe sur
     // l'extraction depuis l'adresse.
-    chargerCommunes().catch(() => null),
+    // Seulement les régions des événements listés : chaque région a son fichier.
+    chargerCommunes(regionsDe(list.map((e) => e.dept))).catch(() => null),
   ])
 
   // Toutes les photos, rangées par position : la position N correspond au
@@ -139,11 +141,23 @@ async function attachRelations(events) {
  * ses PROPRES événements en attente (pour que l'auteur voie sa soumission, avec un
  * badge « En attente »). Les mois passés ne s'affichent jamais.
  */
-export async function listApprovedEvents() {
+export async function listApprovedEvents(codes = null) {
   const uid = getUser()?.id
   let q = supabase.from('events_geo').select('*')
-  if (uid) q = q.or(`status.eq.approved,and(created_by.eq.${uid},status.eq.pending)`)
-  else q = q.eq('status', 'approved')
+  // ⚠ FILTRÉ EN BASE DEPUIS L'OUVERTURE À LA FRANCE : télécharger les
+  // événements des 96 départements pour n'en garder que trois serait un
+  // gaspillage. `codes` = les départements affichés ; sans liste, tout (outils
+  // d'administration). Ses propres événements en attente restent visibles où
+  // qu'ils soient : l'auteur doit voir sa soumission.
+  const dans = codes?.length ? `dept.in.(${codes.join(',')})` : null
+  if (uid) {
+    q = q.or(
+      `${dans ? `and(status.eq.approved,${dans})` : 'status.eq.approved'},and(created_by.eq.${uid},status.eq.pending)`
+    )
+  } else {
+    q = q.eq('status', 'approved')
+    if (codes?.length) q = q.in('dept', codes)
+  }
   q = applyUpcoming(q)
   const { data, error } = await q.order('starts_at', { ascending: true })
   if (error) throw error

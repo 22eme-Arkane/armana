@@ -1,0 +1,61 @@
+/* Armana — départements rangés par région (ui/parRegion.js). */
+.par-region[hidden] { display: none; }
+.par-region { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.8rem; }
+.par-region__bloc {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+}
+.par-region__tete {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.par-region__tete::-webkit-details-marker { display: none; }
+/* Le chevron, qui pivote à l'ouverture. */
+.par-region__tete::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+.par-region__bloc[open] > .par-region__tete::before { transform: rotate(45deg); }
+.par-region__nom { flex: 1 1 auto; min-width: 0; }
+.par-region__compte {
+  flex: 0 0 auto;
+  color: var(--studio-green, var(--green));
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.par-region__tout {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.par-region__bloc.is-choisie { border-color: var(--studio-green, var(--green)); }
+.par-region__corps { border-top: 1px solid var(--border); }
+/* Le numéro en bleu sur le blanc des blocs, comme dans un settings-group. */
+.par-region .dept-num { color: var(--studio-blue); }
+/* Pastilles (filtres, zones de modération) : un peu d'air autour. */
+.par-region__corps.couverture,
+.par-region__corps.choix,
+.par-region__corps > .choix,
+.par-region__corps > .admin-zone { margin: 0; padding: 0.6rem 0.75rem; }

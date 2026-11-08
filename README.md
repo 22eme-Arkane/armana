@@ -1,11 +1,17 @@
+<p align="center">
+  <img src="public/icons/armana-logo-grand.png" alt="Armana" width="160" />
+</p>
+
 # Armana
 
-PWA d'**agenda culturel du Sud-Est de la France** — les six départements de PACA
-(04, 05, 06, 13, 83, 84) et la Drôme (26). Objectif : remplacer un groupe WhatsApp
-de 1000+ personnes par une appli claire — à l'ouverture, les événements culturels
-du territoire sur un **calendrier** + une **carte** interactive. Chacun choisit les
-départements qu'il veut suivre dans **Profil → Mes départements**. Les inscrits
-publient un événement et « **Gemment** » leurs favoris.
+PWA d'**agenda culturel partagé, partout en France** — métropole et Corse :
+96 départements, 13 régions. Née en Provence pour remplacer un groupe WhatsApp
+de 1000+ personnes : à l'ouverture, les événements culturels de sa région sur un
+**calendrier** + une **carte** interactive. Chacun choisit ses régions et
+départements dans **Profil → Mon territoire** (sa région est proposée au premier
+lancement). Les inscrits publient un événement et « **Gemment** » leurs favoris.
+
+**En ligne : https://armana.app**
 
 > Projet **isolé**. Aucune dépendance ni fichier partagé avec PANDORA, ORAKLE, Arkanyx.
 

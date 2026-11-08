@@ -5,9 +5,11 @@ import '../lib/leafletIcons.js' // correctif icônes marqueur (Vite)
 
 import { el, formatDate, formatTime, formatPrice, tarifMode } from './components.js'
 import { icon } from './icons.js'
+import './bulleCarte.css'
 import { navigate, refresh } from '../lib/router.js'
 import { DEFAULT_CENTER, getUserLocation, locationErrorMessage } from '../lib/geo.js'
-import { eventsWithinRadius } from '../lib/events.js'
+import { listApprovedEvents } from '../lib/events.js'
+import { poserFondDeCarte } from '../lib/fondDeCarte.js'
 // ⚠ Par jours COUVERTS (eventDayKeys), jamais « début ≤ jour ≤ fin » : un
 // événement récurrent couvre une longue période mais pas tous ses jours.
 import { eventDayKeys } from '../lib/recurrence.js'
@@ -48,18 +50,17 @@ const majuscule = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 import { studioHeader, boutonPartage } from './studio.js'
 import {
   anneauxExterieurs,
-  departementDuPoint,
+  departementEnFrance,
   estDansLeTerritoire,
   loadDepartements,
   nomDepartement,
-  estActif,
+  TERRITOIRE_HISTORIQUE,
 } from '../lib/departements.js'
 
 // Le sélecteur de rayon (10/20/50 km) a été retiré : un rayon n'apportait
 // qu'un filtre de plus à comprendre, dont le seul effet était de cacher des
-// événements pourtant proches. On charge donc tout le territoire — 300 km
-// depuis n'importe quel point englobent largement les trois départements.
-const RAYON_M = 300000
+// événements pourtant proches. Depuis l'ouverture à la France, la carte charge
+// les événements des départements affichés, sans rayon du tout.
 
 // Zoom d'ouverture, autrefois déduit du cercle de rayon.
 const ZOOM_DEPART = 9
@@ -78,6 +79,19 @@ const ZOOM_DEPART = 9
  * par la découpe, référence circulaire du clipPath).
  */
 const LISERE_JAUNE = false
+
+/**
+ * Bord du masque NET depuis le 07/11/2026 (demande de Matthieu) : le fondu
+ * flou faisait « carte floue ». La MARGE reste : le motif démarre
+ * MARGE_BORD_PX au-delà de la frontière, pour ne pas rogner les noms de villes
+ * posés dessus, et un filet jaune de FILET_PX souligne ce bord.
+ * ⚠ Remettre FONDU_DE_BORD à `true` restaure l'ancien fondu (flou de 11 px).
+ */
+const FONDU_DE_BORD = false
+const MARGE_BORD_PX = 22
+// 0 = pas de filet : jugé « pas beau » par Matthieu le 07/11, avec le fond
+// maison (bord net du motif, sans trait).
+const FILET_PX = 0
 
 // Marqueur aux couleurs d'Armana : la goutte jaune cerclée de vert, avec les
 // masques au centre. Plus gros que le marqueur bleu de Leaflet, qu'on
@@ -166,8 +180,20 @@ export async function viewMap() {
   // Le reste (styles, tarif, quand) ne demande qu'un nouveau tri des points.
   // Débranché seul quand la vue quitte le DOM, comme dans l'Agenda.
   const codesAuRendu = getDepartementsEffectifs().join(',')
-  const desabonner = onFilterChange(() => {
-    if (!wrap.isConnected) return desabonner()
+  // ⚠ « PAS ENCORE AFFICHÉE » N'EST PAS « QUITTÉE ». Après une retouche des
+  // départements, la carte se reconstruit — et pendant ce temps sa nouvelle
+  // version n'est pas encore dans la page. Cocher plusieurs régions d'affilée
+  // tombait dans ce creux : la nouvelle carte se croyait quittée, se
+  // débranchait, et ne voyait jamais les régions suivantes (seule la première
+  // s'affichait). On attend donc qu'elle soit posée, quelques secondes au plus.
+  let montee = false
+  let essais = 0
+  const surChangement = () => {
+    if (!wrap.isConnected) {
+      if (montee || ++essais > 25) return desabonner()
+      return setTimeout(surChangement, 200)
+    }
+    montee = true
     if (getDepartementsEffectifs().join(',') !== codesAuRendu) {
       desabonner()
       return refresh()
@@ -176,7 +202,22 @@ export async function viewMap() {
     majDate()
     loadEvents()
     loadFoodTrucks()
-  })
+  }
+  const desabonner = onFilterChange(surChangement)
+  // Une retouche faite PENDANT la construction (avant l'abonnement) serait
+  // perdue sans ce contrôle, une fois la carte posée.
+  let essaisPose = 0
+  const verifierALaPose = () => {
+    if (!wrap.isConnected) {
+      if (++essaisPose <= 25) setTimeout(verifierALaPose, 200)
+      return
+    }
+    if (getDepartementsEffectifs().join(',') !== codesAuRendu) {
+      desabonner()
+      refresh()
+    }
+  }
+  setTimeout(verifierALaPose, 0)
 
   // 2. Date — à côté de « Filtres » (Matthieu, 15/10/2026). Un petit menu :
   //    aujourd'hui, ce week-end, cette semaine, ou un jour choisi dans le
@@ -302,6 +343,8 @@ export async function viewMap() {
   let userMarker = null
   let contours = null
   let departmentBounds = null
+  /** Promesse du fond de carte (lib/fondDeCarte.js) : maison ou repli OSM. */
+  let fond = null
   // Relue à chaque rendu : l'utilisateur peut changer ses départements dans le
   // Profil et revenir sur la carte sans que celle-ci soit reconstruite.
   // ⚠ LA LISTE EFFECTIVE, pas le choix durable : si le panneau de filtres
@@ -332,7 +375,10 @@ export async function viewMap() {
     if (!map) return
     count.textContent = 'Recherche…'
     try {
-      let events = await eventsWithinRadius({ lat: center.lat, lng: center.lng, radiusM: RAYON_M })
+      // ⚠ PAR DÉPARTEMENT, PLUS PAR RAYON, depuis l'ouverture à la France : un
+      // cercle de 300 km autour de Forcalquier ne voit pas la Bretagne. Les
+      // départements affichés sont filtrés en base (`events.dept`).
+      let events = await listApprovedEvents(mesCodes())
       // Styles et tarif : la même fonction que l'Agenda.
       events = appliquerFiltres(events, tarifMode)
       // « Aujourd'hui » / « Ce week-end » du panneau, puis la date précise.
@@ -342,19 +388,20 @@ export async function viewMap() {
       if (jours) events = events.filter((e) => eventDayKeys(e).some((k) => jours.has(k)))
       // Mode Food trucks : seulement les événements où un camion est annoncé.
       if (avecFoodTrucks) events = events.filter((e) => e.food_trucks?.length || e.restauration)
-      if (contours) {
-        // Hors territoire, ou dans un département que l'utilisateur a décoché.
-        const codes = mesCodes()
-        events = events.filter((e) =>
-          estDansLeTerritoire({ lat: Number(e.lat), lng: Number(e.lng) }, contours, codes)
-        )
-      }
       markers.clearLayers()
       let plotted = 0
       for (const ev of events) {
         if (ev.lat == null || ev.lng == null) continue
         const m = L.marker([ev.lat, ev.lng], { icon: MARQUEUR_ARMANA })
-        m.bindPopup(() => popupContent(ev))
+        // La carte se décale pour montrer la bulle EN ENTIER, sous la rangée
+        // de filtres (60 px) et au-dessus du compteur.
+        m.bindPopup(() => popupContent(ev), {
+          className: 'bulle-armana',
+          minWidth: 240,
+          maxWidth: 260,
+          autoPanPaddingTopLeft: [12, 64],
+          autoPanPaddingBottomRight: [12, 64],
+        })
         markers.addLayer(m)
         plotted++
       }
@@ -512,17 +559,60 @@ export async function viewMap() {
     map.setView([center.lat, center.lng], ZOOM_DEPART, { animate: false })
   }
 
+  /**
+   * La bulle d'un événement : une MINI-FICHE au style d'Armana (refaite le
+   * 07/11/2026 — l'ancienne datait des débuts) : l'affiche en tête, la
+   * catégorie en pastille, le titre, la date, le lieu, le tarif, puis le
+   * bouton vers la fiche complète. Toucher l'affiche y mène aussi.
+   */
   function popupContent(ev) {
-    const box = el('div', 'popup')
-    if (ev.category) box.appendChild(el('span', 'popup__cat', ev.category))
-    box.appendChild(el('strong', 'popup__title', ev.title))
-    box.appendChild(el('div', 'popup__meta', `${formatDate(ev.starts_at)} · ${formatTime(ev.starts_at)}`))
-    box.appendChild(el('div', 'popup__meta', formatPrice(ev)))
+    const box = el('div', 'bulle')
+    const ouvrir = () => navigate('/evenement?id=' + ev.id)
+
+    const tete = el('div', 'bulle__affiche')
+    if (ev.thumb_url) {
+      const img = el('img')
+      img.src = ev.thumb_url
+      img.alt = ''
+      img.loading = 'lazy'
+      img.addEventListener('error', () => img.remove())
+      tete.appendChild(img)
+    } else {
+      tete.classList.add('bulle__affiche--vide')
+      tete.appendChild(el('span', 'bulle__masques', '🎭'))
+    }
+    if (ev.category) tete.appendChild(el('span', 'bulle__cat', ev.category))
+    tete.addEventListener('click', ouvrir)
+    box.appendChild(tete)
+
+    const corps = el('div', 'bulle__corps')
+    const quand = new Date(ev.starts_at)
+    corps.appendChild(
+      el(
+        'span',
+        'bulle__quand',
+        `${quand.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} · ${formatTime(ev.starts_at)}`
+      )
+    )
+    corps.appendChild(el('strong', 'bulle__titre', ev.title))
     const ou = ev.city ? [ev.place_name, ev.city].filter(Boolean).join(', ') : ev.address
-    if (ou) box.appendChild(el('div', 'popup__meta', '📍 ' + ou))
-    const open = el('button', 'btn btn--sm btn--primary', 'Voir le détail')
-    open.addEventListener('click', () => navigate('/evenement?id=' + ev.id))
-    box.appendChild(open)
+    if (ou) {
+      const lieu = el('span', 'bulle__lieu')
+      lieu.append(icon('pin'), el('span', null, ou))
+      corps.appendChild(lieu)
+    }
+    const badges = el('div', 'bulle__badges')
+    const tarif = tarifMode(ev)
+    badges.appendChild(el('span', `bulle__badge bulle__badge--${tarif}`, formatPrice(ev)))
+    if (ev.food_trucks?.length || ev.restauration) {
+      badges.appendChild(el('span', 'bulle__badge bulle__badge--food', 'Food sur place'))
+    }
+    corps.appendChild(badges)
+    const open = el('button', 'bulle__bouton', 'Voir la fiche')
+    open.type = 'button'
+    open.addEventListener('click', ouvrir)
+    corps.appendChild(open)
+    box.appendChild(corps)
     return box
   }
 
@@ -541,6 +631,18 @@ export async function viewMap() {
       // haut à gauche ils tombaient sous les filtres.
       zoomControl: false,
       maxBoundsViscosity: 1.0,
+      // ⚠ ZOOM PAR QUARTS, plus par niveaux entiers (08/11/2026, « bugs de
+      // zoom et de dézoom » signalés par Matthieu). Avec des pas entiers, un
+      // pincement léger était ramené de force au niveau entier le plus proche :
+      // la carte « revenait en arrière » au relâcher. Le fond maison est
+      // vectoriel, il reste net à tout niveau intermédiaire. Les boutons + et −
+      // gardent un pas entier.
+      zoomSnap: 0.25,
+      zoomDelta: 1,
+      wheelPxPerZoomLevel: 90,
+      // Pas de rebond en butée : pincer au-delà du zoom minimum faisait
+      // rebondir la carte, perçu comme un bug.
+      bounceAtZoomLimits: false,
       // ⚠ NE JAMAIS remettre `preferCanvas: true` ICI. Le masque du territoire
       // est un polygone « monde entier » percé des départements, et ces trous
       // reposent sur `fillRule: evenodd` — que le moteur CANEVAS de Leaflet
@@ -550,25 +652,34 @@ export async function viewMap() {
       // l'empile dans le même coin que les zooms et les deux se recouvraient.
       attributionControl: false,
     }).setView([center.lat, center.lng], 11)
+    if (import.meta.env.DEV) window.__armanaCarte = map // inspection en développement
     L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map)
-    L.control.zoom({ position: 'bottomright' }).addTo(map)
+    // ⚠ CHAQUE APPUI SUR + / − COMPTE. Leaflet IGNORE un zoom demandé pendant
+    // l'animation du précédent : trois appuis rapides ne donnaient qu'un ou
+    // deux niveaux (« bugs de zoom », 08/11/2026). On cumule donc une CIBLE,
+    // rejointe dès que l'animation en cours se termine.
+    let cibleZoom = null
+    const zoomer = (pas) => {
+      const depart = cibleZoom ?? map.getZoom()
+      cibleZoom = Math.min(map.getMaxZoom() || 19, Math.max(map.getMinZoom(), depart + pas))
+      if (!map._animatingZoom) map.setZoom(cibleZoom)
+    }
+    map.on('zoomend', () => {
+      if (cibleZoom == null) return
+      if (Math.abs(map.getZoom() - cibleZoom) > 0.01) map.setZoom(cibleZoom)
+      else cibleZoom = null
+    })
+    const boutonsZoom = L.control.zoom({ position: 'bottomright' })
+    boutonsZoom._zoomIn = () => zoomer(1)
+    boutonsZoom._zoomOut = () => zoomer(-1)
+    boutonsZoom.addTo(map)
     // Le recentrage vient se ranger à GAUCHE des zooms, dans le même coin.
     mapFrame.appendChild(recenter)
 
-    // ⚠ PAS de `{s}` : OpenStreetMap a abandonné les sous-domaines a/b/c. En
-    // HTTP/2 ils sont même NUISIBLES — trois connexions à ouvrir au lieu d'une
-    // seule qui multiplexe toutes les tuiles.
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      // Garde une couronne de tuiles autour de l'écran : le déplacement ne
-      // découvre plus de carrés gris.
-      keepBuffer: 3,
-      // Crédit OSM : OBLIGATOIRE (c'est la condition qui rend les tuiles
-      // gratuites), donc conservé. En revanche la mention « Leaflet », elle,
-      // ne l'est pas — on la retire pour alléger le coin de la carte.
-      attribution:
-        '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · Etalab',
-    }).addTo(map)
+    // Le fond de carte MAISON (lib/fondDeCarte.js), chargé à la demande, avec
+    // repli sur les tuiles OpenStreetMap. Le crédit des données est
+    // OBLIGATOIRE : c'est la condition qui rend tout cela gratuit.
+    fond = poserFondDeCarte(map, L)
 
     markers.addTo(map)
     marqueursTrucks.addTo(map)
@@ -585,7 +696,8 @@ export async function viewMap() {
 
     // Le territoire et la position arrivent chacun de leur côté : ni l'un ni
     // l'autre ne fait attendre l'affichage.
-    const pTerritoire = loadDepartements().then((geo) => {
+    // Seulement les régions des départements affichés : chacune a son fichier.
+    const pTerritoire = loadDepartements(mesCodes()).then((geo) => {
       contours = geo
       dessinerTerritoire()
       return geo
@@ -604,7 +716,9 @@ export async function viewMap() {
     // DÉPARTEMENT (jamais la position). Le repli Forcalquier ne compte pas :
     // ce serait inventer une provenance.
     if (!located.fallback && contours) {
-      tagVisitDept(departementDuPoint(located, contours))
+      // N'importe où en France : les contours chargés ne couvrent que les
+      // régions affichées.
+      departementEnFrance(located).then(tagVisitDept).catch(() => {})
       // Hors des départements retenus, on reste sur le repli plutôt que de
       // sauter dans une zone entièrement masquée.
       if (estDansLeTerritoire(located, contours, mesCodes())) {
@@ -612,8 +726,24 @@ export async function viewMap() {
         userMarker.setLatLng([center.lat, center.lng])
       }
     }
-    cadrerSurPosition()
-    await loadEvents()
+    // ⚠ LE REPLI (Forcalquier) N'A DE SENS QUE POUR LE TERRITOIRE D'ORIGINE
+    // (PACA + Drôme). Hors de lui — la Bretagne seule, ou toute la France —
+    // ouvrir sur Forcalquier au zoom 9 cachait tout le reste : sans position
+    // réelle, on cadre alors TOUT le territoire affiché.
+    const horsOrigine = mesCodes().some((c) => !TERRITOIRE_HISTORIQUE.includes(c))
+    if (
+      contours &&
+      departmentBounds &&
+      center.fallback &&
+      (horsOrigine || !estDansLeTerritoire(center, contours, mesCodes()))
+    ) {
+      applyDepartmentLimits()
+      map.fitBounds(departmentBounds, { animate: false })
+      center = { ...departmentBounds.getCenter(), fallback: true }
+      userMarker.remove()
+    } else {
+      cadrerSurPosition()
+    }
   }
 
   /** Le masque et les contours, posés dès que le territoire est chargé. */
@@ -638,22 +768,29 @@ export async function viewMap() {
     const anneaux = anneauxExterieurs(contoursActifs)
     departmentBounds = L.latLngBounds(anneaux.flat())
 
-    map.createPane('departmentMask')
-    map.getPane('departmentMask').style.zIndex = '430'
-    map.getPane('departmentMask').style.pointerEvents = 'none'
-    const world = [[-90, -180], [-90, 180], [90, 180], [90, -180]]
-    const departmentMask = L.polygon([world, ...anneaux], {
-      pane: 'departmentMask',
-      stroke: false,
-      fillColor: '#fff4df',
-      fillOpacity: 1,
-      fillRule: 'evenodd',
-      interactive: false,
-      className: 'department-mask',
-    }).addTo(map)
-    applyDepartmentMaskPattern(departmentMask)
-    appliquerFonduDeBord(map, departmentMask)
-    if (LISERE_JAUNE) dessinerLisere(contoursActifs)
+    // ⚠ AVEC LE FOND MAISON, LE MASQUE EST DANS LA CARTE ELLE-MÊME, sous les
+    // noms de lieux (lib/fondDeCarte.js) : une ville près de la frontière
+    // garde son nom entier. Le masque SVG ci-dessous, posé PAR-DESSUS tout,
+    // ne sert plus qu'au repli OpenStreetMap.
+    fond.then((f) => {
+      if (f.maison) return f.masquer(contoursActifs, codesActifs)
+      map.createPane('departmentMask')
+      map.getPane('departmentMask').style.zIndex = '430'
+      map.getPane('departmentMask').style.pointerEvents = 'none'
+      const world = [[-90, -180], [-90, 180], [90, 180], [90, -180]]
+      const departmentMask = L.polygon([world, ...anneaux], {
+        pane: 'departmentMask',
+        stroke: false,
+        fillColor: '#fff4df',
+        fillOpacity: 1,
+        fillRule: 'evenodd',
+        interactive: false,
+        className: 'department-mask',
+      }).addTo(map)
+      applyDepartmentMaskPattern(departmentMask)
+      appliquerFonduDeBord(map, departmentMask)
+      if (LISERE_JAUNE) dessinerLisere(contoursActifs)
+    })
 
     // La carte occupe la place restante (flex) : sa taille définitive n'est
     // connue qu'APRÈS la mise en page. On cadre donc APRÈS mesure, sinon le
@@ -739,7 +876,10 @@ export async function viewMap() {
     const fitZoom = map.getBoundsZoom(departmentBounds, false, L.point(12, 12))
     // Deux niveaux de recul : l'extérieur reste masqué, mais on situe mieux la
     // silhouette du département.
-    map.setMinZoom(Math.max(6, fitZoom - 2))
+    // ⚠ Plancher à 4, plus à 6 : depuis l'ouverture à la France, un
+    // territoire peut couvrir tout le pays, qui ne tient à l'écran d'un
+    // téléphone qu'au zoom 4 ou 5. À 6, on restait bloqué sur une région.
+    map.setMinZoom(Math.max(4, fitZoom - 2))
 
     // ⚠ Marge volontairement large (mesurée, pas devinée). Au zoom d'ouverture,
     // la vue fait ~0,91° de haut pour 1,03° de bornes : il ne reste presque
@@ -808,27 +948,24 @@ export async function viewMap() {
       geoMsg.textContent = locationErrorMessage(located.reason)
       return
     }
+    // Le département du point, n'importe où en France (contours allégés) : les
+    // contours complets chargés ne couvrent que les régions affichées.
+    const dept = await departementEnFrance(located).catch(() => null)
     if (contours && !estDansLeTerritoire(located, contours, mesCodes())) {
       // On ne déplace PAS la carte sans le dire : l'utilisateur croirait que sa
       // position a été prise en compte.
-      // Trois cas distincts : un département couvert mais décoché, un
-      // département dont les contours existent mais qui n'est pas encore
-      // ouvert, ou franchement ailleurs.
-      const dept = departementDuPoint(located, contours)
       geoMsg.textContent = !dept
         ? 'Vous semblez être hors du territoire couvert : la carte n’a pas bougé.'
-        : estActif(dept)
-          ? `Vous êtes dans un département que vous n’affichez pas (${nomDepartement(dept)}). ` +
-            'Ajoutez-le depuis Profil → Mes départements.'
-          : `Armana ne couvre pas encore ${nomDepartement(dept)} : la carte n’a pas bougé.`
+        : `Vous êtes dans un département que vous n’affichez pas (${nomDepartement(dept)}). ` +
+          'Ajoutez-le depuis Profil → Mon territoire.'
       return
     }
 
     geoMsg.textContent = ''
     center = located
     // Statistique de provenance : le DÉPARTEMENT observé, jamais la position.
-    tagVisitDept(departementDuPoint(located, contours))
-    userMarker.setLatLng([center.lat, center.lng])
+    tagVisitDept(dept)
+    userMarker.setLatLng([center.lat, center.lng]).addTo(map)
     cadrerSurPosition()
     await loadEvents()
   })
@@ -863,8 +1000,6 @@ function applyDepartmentMaskPattern(layer) {
   pattern.setAttribute('height', '118')
   pattern.innerHTML = `
     <rect width="132" height="118" fill="#0b55c5"/>
-    <path d="M-18 112 112-18M54 142 150 46" stroke="#f4ca15" stroke-width="18" opacity=".09"/>
-    <circle cx="112" cy="18" r="17" fill="#539957" opacity=".12"/>
     <image href="/icons/armana-logo.png" x="8" y="8" width="46" height="46" opacity=".9" transform="rotate(-9 31 31)"/>
     <image href="/icons/armana-logo.png" x="74" y="61" width="39" height="39" opacity=".72" transform="rotate(11 93 80)"/>
   `
@@ -930,10 +1065,37 @@ function appliquerFonduDeBord(map, layer) {
   bord.setAttribute('fill', '#000')
   bord.setAttribute('fill-rule', 'evenodd')
   bord.setAttribute('stroke', '#000')
-  bord.setAttribute('stroke-width', '34')
+  bord.setAttribute('stroke-width', FONDU_DE_BORD ? '34' : String(MARGE_BORD_PX * 2))
   bord.setAttribute('stroke-linejoin', 'round')
-  bord.setAttribute('filter', 'url(#territoire-flou)')
+  if (FONDU_DE_BORD) bord.setAttribute('filter', 'url(#territoire-flou)')
   masque.append(fond, bord)
+
+  /**
+   * Le filet jaune, au BORD DU MOTIF et non sur la frontière : un anneau de
+   * FILET_PX pris entre la marge (noir) et la marge + le filet (blanc). Il ne
+   * passe donc jamais sur les noms posés près de la frontière.
+   */
+  const masqueFilet = document.createElementNS(ns, 'mask')
+  masqueFilet.id = 'territoire-filet'
+  masqueFilet.setAttribute('maskUnits', 'userSpaceOnUse')
+  const filetExterieur = document.createElementNS(ns, 'path')
+  filetExterieur.setAttribute('fill', '#fff')
+  filetExterieur.setAttribute('fill-rule', 'evenodd')
+  filetExterieur.setAttribute('stroke', '#fff')
+  filetExterieur.setAttribute('stroke-width', String((MARGE_BORD_PX + FILET_PX) * 2))
+  filetExterieur.setAttribute('stroke-linejoin', 'round')
+  const filetInterieur = document.createElementNS(ns, 'path')
+  filetInterieur.setAttribute('fill', '#000')
+  filetInterieur.setAttribute('fill-rule', 'evenodd')
+  filetInterieur.setAttribute('stroke', '#000')
+  filetInterieur.setAttribute('stroke-width', String(MARGE_BORD_PX * 2))
+  filetInterieur.setAttribute('stroke-linejoin', 'round')
+  masqueFilet.append(filetExterieur, filetInterieur)
+  const filet = document.createElementNS(ns, 'rect')
+  filet.setAttribute('fill', '#f4ca15')
+  filet.setAttribute('mask', 'url(#territoire-filet)')
+  filet.style.pointerEvents = 'none'
+  if (!FONDU_DE_BORD && FILET_PX > 0) path.after(filet)
 
   /**
    * Découpe « tout sauf le territoire », qui sert au liseré jaune.
@@ -955,7 +1117,7 @@ function appliquerFonduDeBord(map, layer) {
   dehors.setAttribute('clip-rule', 'evenodd')
   decoupe.appendChild(dehors)
 
-  defs.append(filtre, masque, decoupe)
+  defs.append(filtre, masque, masqueFilet, decoupe)
   path.setAttribute('mask', 'url(#territoire-fondu)')
 
   /**
@@ -966,7 +1128,10 @@ function appliquerFonduDeBord(map, layer) {
   const suivre = () => {
     const d = path.getAttribute('d') || ''
     const sousTraces = d.split('M').filter((s) => s.trim())
-    bord.setAttribute('d', sousTraces.length > 1 ? 'M' + sousTraces.slice(1).join('M') : '')
+    const frontieres = sousTraces.length > 1 ? 'M' + sousTraces.slice(1).join('M') : ''
+    bord.setAttribute('d', frontieres)
+    filetExterieur.setAttribute('d', frontieres)
+    filetInterieur.setAttribute('d', frontieres)
     dehors.setAttribute('d', d)
 
     const vue = map.getPixelBounds()
@@ -982,6 +1147,8 @@ function appliquerFonduDeBord(map, layer) {
       masque.setAttribute(cle, String(valeur))
       fond.setAttribute(cle, String(valeur))
       filtre.setAttribute(cle, String(valeur))
+      masqueFilet.setAttribute(cle, String(valeur))
+      filet.setAttribute(cle, String(valeur))
     }
   }
   suivre()

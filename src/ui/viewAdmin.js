@@ -13,7 +13,7 @@ import { studioEventItem, studioHeader } from './studio.js'
 import { isAdmin } from '../lib/auth.js'
 import { listPendingEvents, setEventStatus } from '../lib/events.js'
 import { myModDepts } from '../lib/moderation.js'
-import { nomDepartement } from '../lib/departements.js'
+import { nomDepartement, nomRegion, regionDuDept, resumeTerritoire } from '../lib/departements.js'
 import { decideFiche, listFichesEnAttente } from '../lib/fiches.js'
 import { etatPlanning, reglages } from '../lib/foodTrucks.js'
 import { supabase } from '../lib/supabaseClient.js'
@@ -40,7 +40,7 @@ export async function viewAdmin() {
       'p',
       'page__subtitle',
       zone?.length
-        ? `Événements en attente dans votre zone (${zone.join(', ')}).`
+        ? `Événements en attente dans votre zone (${resumeTerritoire(zone)}).`
         : 'Événements en attente de validation.'
     )
   )
@@ -109,7 +109,40 @@ export async function viewAdmin() {
     const auteur = el('span', 'fb-tag moderation-auteur', ev.author_name || 'Anonyme')
     const card = posterEventCard(ev, { showGem: false, index: events.indexOf(ev) })
     item = studioEventItem(card, [auteur, dept, approve, reject], { status: ev.status })
+    item.dataset.region = regionDuDept(ev.dept) ?? ''
     list.appendChild(item)
+  }
+
+  // ⚠ DEPUIS L'OUVERTURE À LA FRANCE : une file venue de plusieurs régions se
+  // trie par région, d'un geste, au lieu de défiler toute la France.
+  const parRegion = new Map()
+  for (const ev of events) {
+    const r = regionDuDept(ev.dept) ?? ''
+    parRegion.set(r, (parRegion.get(r) ?? 0) + 1)
+  }
+  if (parRegion.size > 1) {
+    const rangee = el('div', 'choix moderation-regions')
+    let actif = null
+    const boutons = []
+    const ajouter = (code, texte) => {
+      const b = el('button', 'choix__option', texte)
+      b.type = 'button'
+      b.addEventListener('click', () => {
+        actif = code
+        for (const x of boutons) x.b.classList.toggle('is-active', x.code === actif)
+        for (const it of list.children) {
+          if (it.dataset.region != null) it.hidden = actif != null && it.dataset.region !== actif
+        }
+      })
+      boutons.push({ b, code })
+      rangee.appendChild(b)
+    }
+    ajouter(null, `Toutes (${events.length})`)
+    for (const [code, n] of [...parRegion].sort((a, b) => b[1] - a[1])) {
+      ajouter(code, `${code ? nomRegion(code) : 'Hors territoire'} (${n})`)
+    }
+    boutons[0].b.classList.add('is-active')
+    list.before(rangee)
   }
   return wrap
 }

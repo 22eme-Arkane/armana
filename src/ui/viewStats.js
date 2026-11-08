@@ -16,7 +16,7 @@ import {
   getVisitsTotal,
 } from '../lib/admins.js'
 import { myPendingCount } from '../lib/moderation.js'
-import { DEPARTEMENTS, nomDepartement } from '../lib/departements.js'
+import { DEPARTEMENTS, REGIONS, nomDepartement } from '../lib/departements.js'
 import { purgePastMonths } from '../lib/events.js'
 import { navigate } from '../lib/router.js'
 
@@ -351,13 +351,20 @@ function line(label, value) {
  * Les codes hors de la liste ouverte (« — » sans position, ou un département
  * fermé qui porte encore des données) sont conservés et rejetés en fin.
  */
+// ⚠ DEPUIS L'OUVERTURE À LA FRANCE, PAR RÉGION : 96 lignes à zéro rendraient
+// le graphique illisible. Chaque région a sa ligne (même vide, pour la même
+// raison que ci-dessus), suivie du détail de ses départements actifs.
 function repartitionParDept(lignes, libelleHorsListe) {
   const trouves = new Map((lignes ?? []).map((d) => [d.code, d.n]))
-  const ouverts = DEPARTEMENTS.map((d) => ({
-    label: `${d.code} ${d.nom}`,
-    n: trouves.get(d.code) ?? 0,
-  }))
-  ouverts.sort((a, b) => b.n - a.n || a.label.localeCompare(b.label))
+  const regions = REGIONS.map((r) => {
+    const depts = r.depts
+      .map((d) => ({ label: `· ${d.code} ${d.nom}`, n: trouves.get(d.code) ?? 0, sous: true }))
+      .filter((d) => d.n > 0)
+      .sort((a, b) => b.n - a.n)
+    return { label: r.nom, n: depts.reduce((s, d) => s + d.n, 0), depts }
+  })
+  regions.sort((a, b) => b.n - a.n || a.label.localeCompare(b.label))
+  const ouverts = regions.flatMap(({ label, n, depts }) => [{ label, n }, ...depts])
 
   const autres = []
   for (const [code, n] of trouves) {
@@ -374,7 +381,7 @@ function barChart(rows) {
   const max = Math.max(1, ...rows.map((r) => r.n))
   const box = el('div', 'bars')
   for (const r of rows) {
-    const line = el('div', 'bars__row')
+    const line = el('div', r.sous ? 'bars__row bars__row--sous' : 'bars__row')
     line.appendChild(el('span', 'bars__label', r.label))
     const track = el('div', 'bars__track')
     const fill = el('div', 'bars__fill')

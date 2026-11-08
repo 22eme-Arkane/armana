@@ -11,12 +11,12 @@ export const APP_URL = 'https://armana.app'
 
 const TITRE = 'Armana'
 // ⚠ PAS DE DÉPARTEMENT NI DE RÉGION DANS CE TEXTE. Armana est partie du seul
-// 04, couvre aujourd'hui PACA plus la Drôme, et le territoire continuera de
-// bouger : une formule géographique précise redevient fausse à chaque
-// ouverture. « Sud-Est de la France » reste juste sans avoir à y revenir.
+// 04, puis a couvert PACA et la Drôme, et depuis le 07/11/2026 toute la
+// France : une formule géographique précise redevient fausse à chaque
+// ouverture. « Partout en France » est juste aujourd'hui.
 // La même phrase est reprise dans manifest.webmanifest et dans les balises
 // Open Graph d'index.html : les trois doivent changer ensemble.
-const TEXTE = 'L’agenda culturel du Sud-Est de la France.'
+const TEXTE = 'L’agenda culturel partagé, partout en France.'
 
 /**
  * Copie un texte, avec repli pour les navigateurs sans presse-papiers

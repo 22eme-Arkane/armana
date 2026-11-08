@@ -27,7 +27,8 @@ import {
   setAdminByEmail,
 } from '../lib/admins.js'
 import { decideModeratorRequest, listModeratorRequests, setModerator } from '../lib/moderation.js'
-import { DEPARTEMENTS } from '../lib/departements.js'
+import { DEPARTEMENTS, regionsDe, resumeTerritoire } from '../lib/departements.js'
+import { listeParRegion, zoneParRegion } from './parRegion.js'
 import { avatarMembre, etiquetteType } from './typeCompte.js'
 import { normaliser } from './viewMembers.js'
 import { estSensible, raconter } from './viewJournal.js'
@@ -90,20 +91,31 @@ export async function viewAdmins() {
     c.appendChild(el('h3', 'admin-carte__titre', 'Couverture du territoire'))
     const moderateurs = admins.filter((a) => !a.is_owner)
     const attente = new Map((couverture ?? []).map((r) => [r.dept, (r.events_pending ?? 0) + (r.fiches_pending ?? 0)]))
-    const grille = el('div', 'couverture')
-    for (const d of DEPARTEMENTS) {
-      const qui = moderateurs.filter((a) => (a.mod_depts ?? []).includes(d.code))
-      const n = attente.get(d.code) ?? 0
-      const t = el('div', 'couverture__dept')
-      t.title = d.nom
-      t.classList.add(!qui.length ? 'couverture__dept--vide' : n >= 5 ? 'couverture__dept--charge' : 'couverture__dept--ok')
-      t.appendChild(el('strong', 'couverture__code', d.code))
-      t.appendChild(
-        el('span', 'couverture__qui', qui.length ? qui.map(prenom).join(', ') : 'personne')
-      )
-      if (couverture) t.appendChild(el('span', 'couverture__attente', n ? `${n} en attente` : 'à jour'))
-      grille.appendChild(t)
-    }
+    // Rangée par région depuis l'ouverture à la France. Le compteur de chaque
+    // région dit combien de ses départements ont un modérateur ; ne sont
+    // dépliées que celles où il se passe quelque chose (modérateur ou attente).
+    const couverts = DEPARTEMENTS.filter((d) =>
+      moderateurs.some((a) => (a.mod_depts ?? []).includes(d.code))
+    ).map((d) => d.code)
+    const actives = regionsDe([...couverts, ...[...attente.entries()].filter(([, n]) => n > 0).map(([k]) => k)])
+    const grille = listeParRegion({
+      selection: () => couverts,
+      ouvertes: actives,
+      classeCorps: 'couverture',
+      rendre: (d) => {
+        const qui = moderateurs.filter((a) => (a.mod_depts ?? []).includes(d.code))
+        const n = attente.get(d.code) ?? 0
+        const t = el('div', 'couverture__dept')
+        t.title = d.nom
+        t.classList.add(!qui.length ? 'couverture__dept--vide' : n >= 5 ? 'couverture__dept--charge' : 'couverture__dept--ok')
+        t.appendChild(el('strong', 'couverture__code', d.code))
+        t.appendChild(
+          el('span', 'couverture__qui', qui.length ? qui.map(prenom).join(', ') : 'personne')
+        )
+        if (couverture) t.appendChild(el('span', 'couverture__attente', n ? `${n} en attente` : 'à jour'))
+        return t
+      },
+    })
     c.appendChild(grille)
     const hors = attente.get('hors') ?? 0
     c.appendChild(
@@ -232,28 +244,14 @@ export async function viewAdmins() {
       tete.appendChild(bascule)
       item.appendChild(tete)
 
-      const zone = el('div', 'admin-zone')
-      zone.hidden = true
       let depts = [...(a.mod_depts ?? [])]
-      const boutons = new Map()
-      const peindre = () => {
-        for (const [code, b] of boutons) b.classList.toggle('is-active', depts.includes(code))
-        bascule.textContent = depts.length ? depts.join(' · ') : 'aucun'
-        bascule.setAttribute('aria-expanded', String(!zone.hidden))
-        bascule.title = 'Modifier la zone de ' + (a.display_name || a.email)
-      }
+      // Rangée par région depuis l'ouverture à la France (ui/parRegion.js).
       // ⚠ Pendant l'enregistrement, TOUTES les pastilles sont gelées : deux
       // touches rapprochées partiraient chacune de l'état d'avant l'autre, et
       // la seconde écraserait la première (set_moderator remplace la zone).
-      const geler = (oui) => {
-        for (const b of boutons.values()) b.disabled = oui
-      }
-      for (const d of DEPARTEMENTS) {
-        const b = el('button', 'admin-zone__dept', d.code)
-        b.type = 'button'
-        b.title = d.nom
-        b.setAttribute('aria-label', d.nom)
-        b.addEventListener('click', async () => {
+      const zone = zoneParRegion({
+        selection: () => depts,
+        onClic: async (d) => {
           const prochain = depts.includes(d.code) ? depts.filter((x) => x !== d.code) : [...depts, d.code]
           if (
             !prochain.length &&
@@ -261,7 +259,7 @@ export async function viewAdmins() {
           ) {
             return
           }
-          geler(true)
+          zone.geler(true)
           try {
             const res = await setModerator(a.id, prochain)
             if (res?.role !== 'admin') {
@@ -273,11 +271,16 @@ export async function viewAdmins() {
           } catch (e) {
             alert('Modification impossible : ' + e.message)
           } finally {
-            geler(false)
+            zone.geler(false)
           }
-        })
-        boutons.set(d.code, b)
-        zone.appendChild(b)
+        },
+      })
+      zone.hidden = true
+      const peindre = () => {
+        zone.peindre()
+        bascule.textContent = depts.length ? resumeTerritoire(depts) : 'aucun'
+        bascule.setAttribute('aria-expanded', String(!zone.hidden))
+        bascule.title = 'Modifier la zone de ' + (a.display_name || a.email)
       }
       bascule.addEventListener('click', () => {
         zone.hidden = !zone.hidden
@@ -359,20 +362,14 @@ export async function viewAdmins() {
       choix.hidden = !choisi
       if (!choisi) return
       choix.appendChild(el('p', 'admin-carte__detail', `Zone de ${choisi.display_name} :`))
-      const zone = el('div', 'admin-zone')
-      for (const d of DEPARTEMENTS) {
-        const b = el('button', 'admin-zone__dept', d.code)
-        b.type = 'button'
-        b.title = d.nom
-        b.setAttribute('aria-label', d.nom)
-        b.classList.toggle('is-active', depts.has(d.code))
-        b.addEventListener('click', () => {
+      const zone = zoneParRegion({
+        selection: () => [...depts],
+        onClic: (d) => {
           if (depts.has(d.code)) depts.delete(d.code)
           else depts.add(d.code)
-          b.classList.toggle('is-active', depts.has(d.code))
-        })
-        zone.appendChild(b)
-      }
+          zone.peindre()
+        },
+      })
       choix.appendChild(zone)
       const nommer = el('button', 'btn btn--primary btn--block')
       nommer.type = 'button'
@@ -408,20 +405,15 @@ export async function viewAdmins() {
     email.type = 'email'
     email.placeholder = 'personne@exemple.fr'
     email.setAttribute('aria-label', 'E-mail du compte')
-    const zoneEmail = el('div', 'admin-zone')
     const choisisEmail = new Set()
-    for (const d of DEPARTEMENTS) {
-      const b = el('button', 'admin-zone__dept', d.code)
-      b.type = 'button'
-      b.title = d.nom
-      b.setAttribute('aria-label', d.nom)
-      b.addEventListener('click', () => {
+    const zoneEmail = zoneParRegion({
+      selection: () => [...choisisEmail],
+      onClic: (d) => {
         if (choisisEmail.has(d.code)) choisisEmail.delete(d.code)
         else choisisEmail.add(d.code)
-        b.classList.toggle('is-active', choisisEmail.has(d.code))
-      })
-      zoneEmail.appendChild(b)
-    }
+        zoneEmail.peindre()
+      },
+    })
     const msgEmail = el('p', 'form__msg')
     const go = el('button', 'btn btn--ghost btn--block', 'Désigner par e-mail')
     go.type = 'button'

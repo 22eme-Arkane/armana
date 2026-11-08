@@ -14,7 +14,7 @@
 // séparés finiraient immanquablement par se contredire, et la rangée
 // mentirait sur ce qui est réellement filtré.
 
-import { getMesDepartements } from './mesDepartements.js'
+import { getMesDepartements, setMesDepartements } from './mesDepartements.js'
 import { dayKey } from './recurrence.js'
 
 /** Styles retenus. Ensemble VIDE = tous les styles, jamais « aucun ». */
@@ -182,9 +182,36 @@ export function deptsRetouches() {
 
 export function basculerDepartement(code) {
   const actuels = getDepartementsEffectifs()
-  const prochain = actuels.includes(code)
-    ? actuels.filter((c) => c !== code)
-    : [...actuels, code]
+  retoucherDepartements(actuels.includes(code) ? actuels.filter((c) => c !== code) : [...actuels, code])
+}
+
+/** Toute une région d'un coup (« Toute la région » / « Aucun » du panneau). */
+export function basculerRegion(codes, ajouter) {
+  const actuels = getDepartementsEffectifs()
+  retoucherDepartements(
+    ajouter ? [...new Set([...actuels, ...codes])] : actuels.filter((c) => !codes.includes(c))
+  )
+}
+
+/** Abandonne la retouche : retour au territoire réglé dans Profil. */
+export function revenirAuTerritoire() {
+  deptsTemporaires = null
+  notifier()
+}
+
+/**
+ * La retouche devient le territoire DURABLE (Profil → Mon territoire) : c'est
+ * le pont entre le panneau et le réglage, dans ce sens-là. L'autre sens va de
+ * soi — sans retouche, le panneau montre exactement Mon territoire.
+ */
+export function garderCommeTerritoire() {
+  if (!deptsTemporaires) return
+  setMesDepartements(deptsTemporaires)
+  deptsTemporaires = null
+  notifier()
+}
+
+function retoucherDepartements(prochain) {
   // Tout décocher n'a pas de sens : on retombe sur le choix durable plutôt que
   // de vider l'agenda sans rien expliquer.
   deptsTemporaires = prochain.length ? prochain : null

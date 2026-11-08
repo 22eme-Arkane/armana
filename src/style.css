@@ -3144,7 +3144,10 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
 .stats-section svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .settings-row--static { cursor: default; }
 .bars { display: flex; flex-direction: column; gap: 0.28rem; padding: 0.2rem 0; }
-.bars__row { display: grid; grid-template-columns: 5.4rem 1fr 2.2rem; align-items: center; gap: 0.4rem; }
+/* 8 rem : depuis l'ouverture à la France, les lignes portent des noms de
+   région (« Provence-Alpes-Côte d'Azur »). */
+.bars__row { display: grid; grid-template-columns: 8rem 1fr 2.2rem; align-items: center; gap: 0.4rem; }
+.bars__row--sous .bars__label { padding-left: 0.5rem; font-weight: 500; }
 .bars__label {
   font-size: 0.72rem; font-weight: 600; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;

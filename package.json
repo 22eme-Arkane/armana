@@ -3,17 +3,19 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Armana — PWA d'agenda culturel régional (département 04) : calendrier + carte, publication et favoris (Gems), backend Supabase.",
+  "description": "Armana — PWA d'agenda culturel partagé, partout en France : calendrier + carte, publication et favoris (Gems), backend Supabase.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "@supabase/supabase-js": "^2.45.0",
     "chrono-node": "^2.9.1",
     "heic-to": "^1.5.2",
-    "leaflet": "^1.9.4"
+    "leaflet": "^1.9.4",
+    "maplibre-gl": "^6.16.0"
   },
   "devDependencies": {
     "vite": "^5.4.0"
