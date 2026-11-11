@@ -19,8 +19,15 @@ const COEUR =
 
 /** Épaisseur du trait, dans la grille de 24. */
 const TRAIT = 2
-/** Le cœur est réduit et descendu, pour laisser sa place à l'étincelle. */
-const ECHELLE_COEUR = 0.86
+/**
+ * ⚠ LE CŒUR EST CENTRÉ SUR SON LIBELLÉ (retour de Matthieu, 12/11/2026).
+ * Au premier jet je l'avais poussé à gauche pour loger l'étincelle dans la
+ * grille : il paraissait décalé au-dessus de « Favoris ». Il occupe désormais
+ * la même largeur que l'agenda et la carte (3 → 21), et c'est l'ÉTINCELLE qui
+ * déborde, en haut à droite, hors de la grille (`overflow: visible`).
+ */
+const ECHELLE_COEUR = 0.9
+const PLACE_COEUR = 'translate(1.2 1.7)'
 
 const FORME = 'fill="var(--o-fond)" stroke="var(--o-trait)"'
 
@@ -39,9 +46,9 @@ const DESSINS = {
     'fill="var(--o-repere)" stroke="var(--o-repere-trait)"/>' +
     '<circle cx="17.5" cy="5.3" r="1.2" fill="var(--o-trait)" stroke="none"/>',
   heart:
-    `<g transform="translate(-1.2 3.4) scale(${ECHELLE_COEUR})" stroke-width="${(TRAIT / ECHELLE_COEUR).toFixed(2)}">` +
+    `<g transform="${PLACE_COEUR} scale(${ECHELLE_COEUR})" stroke-width="${(TRAIT / ECHELLE_COEUR).toFixed(2)}">` +
     `<path d="${COEUR}" ${FORME}/></g>` +
-    '<path d="M20.2 1c.3 1.8 1.1 2.7 2.9 3-1.8.3-2.6 1.2-2.9 3-.3-1.8-1.1-2.7-2.9-3 1.8-.3 2.6-1.2 2.9-3Z" ' +
+    '<path d="M22 0c.27 1.6 1 2.4 2.6 2.6-1.6.27-2.33 1-2.6 2.6-.27-1.6-1-2.4-2.6-2.6 1.6-.27 2.33-1 2.6-2.6Z" ' +
     'fill="var(--o-accent)" stroke="none"/>',
   user:
     `<path d="M5 21.5a1 1 0 0 1-1-1 6.5 6.5 0 0 1 6.5-6.5h3a6.5 6.5 0 0 1 6.5 6.5 1 1 0 0 1-1 1Z" ${FORME}/>` +

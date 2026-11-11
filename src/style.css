@@ -815,6 +815,23 @@ a.settings-row .settings-row__label { word-break: break-all; }
   padding-left: 0.7rem;
   padding-right: 0.7rem;
 }
+/* ⚠ LE BLEU DESCEND JUSQU'EN BAS DE L'ÉCRAN, même quand la page est courte.
+   Retour de Matthieu (12/11/2026) : dans Modération, sans rien à relire, le
+   bleu s'arrêtait sous le contenu et laissait un grand carré clair — le fond
+   crème de `.content`. `min-height: 100%` ne pouvait rien : le parent n'a pas
+   de hauteur définie. On fait donc de `.content` une colonne que la page
+   remplit, et la page descend SOUS la barre d'onglets en annulant exactement
+   le bas que `.content` lui réserve (`--nav-safe` + 1rem). Vaut pour tous les
+   sous-écrans bleus : Notifications et Connexion avaient le même défaut. */
+.content:has(> .page--studio-blue.page--studio-sub:not(.fiche)) {
+  display: flex;
+  flex-direction: column;
+}
+.page--studio-blue.page--studio-sub:not(.fiche) {
+  flex: 1 0 auto;
+  padding-bottom: calc(var(--nav-safe) + 2.5rem);
+  margin-bottom: calc(-1 * (var(--nav-safe) + 1rem));
+}
 /* ⚠ `.page--studio-blue.page--studio-sub` : deux classes sur le MÊME élément,
    pour battre `.page--studio-sub .page__subtitle` défini plus bas. Sans cela
    le sous-titre restait vert sur le bleu — donc invisible. */
@@ -1583,7 +1600,7 @@ a.settings-row .settings-row__label { word-break: break-all; }
 /* --- Faire un don, sur fond bleu (05/11/2026) ----------------------------- */
 /* Le bleu descend jusque sous la barre d'onglets : sinon une bande crème
    apparaissait en bas de page. */
-.page--studio-don { padding-bottom: 7rem; margin-bottom: -6rem; }
+/* (Le bleu jusqu'en bas : voir `.page--studio-blue.page--studio-sub`, plus haut.) */
 .page--studio-don .illu { margin: 0.8rem 0 0.4rem; }
 .page--studio-don .don-banner { margin: 0.4rem 0 1rem; text-decoration: none; }
 .page--studio-don.page--studio-sub .page__subtitle {

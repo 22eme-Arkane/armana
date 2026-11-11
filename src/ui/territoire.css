@@ -1,5 +1,6 @@
 /* Armana — « Mon territoire » sur fond bleu (refonte du 07/11/2026). */
-.page--studio-territoire { padding-bottom: 7rem; margin-bottom: -6rem; }
+/* (Le bleu jusqu'en bas de l'écran : règle commune des sous-écrans bleus,
+   `.page--studio-blue.page--studio-sub` dans style.css.) */
 .page--studio-territoire .carte-depts { margin: 0.9rem 0 0.2rem; }
 /* La France entière : la vignette prend toute la largeur, sans plafond. */
 .page--studio-territoire .carte-depts__svg { max-height: none; height: auto; }

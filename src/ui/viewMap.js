@@ -113,6 +113,15 @@ const MARQUEUR_ARMANA = L.divIcon({
   popupAnchor: [0, -48],
 })
 
+/** La même goutte, avec le NOMBRE d'événements qu'elle réunit au même endroit. */
+function marqueurGroupe(n) {
+  return L.divIcon({
+    ...MARQUEUR_ARMANA.options,
+    className: 'marqueur-armana marqueur-armana--groupe',
+    html: MARQUEUR_ARMANA.options.html + `<span class="marqueur-armana__nombre">${n > 9 ? '9+' : n}</span>`,
+  })
+}
+
 // Marqueur de food truck : un rond rouge au camion blanc. Volontairement d'une
 // AUTRE FORME que la goutte des événements — on doit distinguer les deux d'un
 // coup d'œil, même sans couleurs.
@@ -389,21 +398,48 @@ export async function viewMap() {
       // Mode Food trucks : seulement les événements où un camion est annoncé.
       if (avecFoodTrucks) events = events.filter((e) => e.food_trucks?.length || e.restauration)
       markers.clearLayers()
-      let plotted = 0
+      // ⚠ UN SEUL REPÈRE PAR ENDROIT (retour de Matthieu, 12/11/2026). Deux
+      // événements posés exactement au même point — le même théâtre, ou bien
+      // deux salles laissées au centre de leur commune — donnaient deux
+      // gouttes superposées : on n'en voyait qu'une, et rien ne permettait
+      // d'atteindre l'autre (« Swing Brassens » cachait « Muriel Robin » à
+      // La Ciotat). Mesuré ce jour-là : 19 événements à venir sur 43
+      // partageaient leur point avec un autre. Le repère porte désormais leur
+      // nombre, et sa bulle les liste tous.
+      const parEndroit = new Map()
       for (const ev of events) {
         if (ev.lat == null || ev.lng == null) continue
-        const m = L.marker([ev.lat, ev.lng], { icon: MARQUEUR_ARMANA })
-        // La carte se décale pour montrer la bulle EN ENTIER, sous la rangée
-        // de filtres (60 px) et au-dessus du compteur.
-        m.bindPopup(() => popupContent(ev), {
-          className: 'bulle-armana',
-          minWidth: 240,
-          maxWidth: 260,
-          autoPanPaddingTopLeft: [12, 64],
-          autoPanPaddingBottomRight: [12, 64],
+        // Quatre décimales : une dizaine de mètres, le même bâtiment.
+        const cle = `${Number(ev.lat).toFixed(4)},${Number(ev.lng).toFixed(4)}`
+        if (!parEndroit.has(cle)) parEndroit.set(cle, [])
+        parEndroit.get(cle).push(ev)
+      }
+      // La carte se décale pour montrer la bulle EN ENTIER, sous la rangée de
+      // filtres (60 px) et au-dessus du compteur.
+      const bulle = {
+        className: 'bulle-armana',
+        minWidth: 240,
+        maxWidth: 260,
+        autoPanPaddingTopLeft: [12, 64],
+        autoPanPaddingBottomRight: [12, 64],
+      }
+      let plotted = 0
+      for (const groupe of parEndroit.values()) {
+        const [premier] = groupe
+        const seul = groupe.length === 1
+        const m = L.marker([premier.lat, premier.lng], {
+          icon: seul ? MARQUEUR_ARMANA : marqueurGroupe(groupe.length),
+          // Un repère qui en cache plusieurs passe devant ses voisins.
+          zIndexOffset: seul ? 0 : 500,
         })
+        if (seul) {
+          m.bindPopup(() => popupContent(premier), bulle)
+        } else {
+          groupe.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))
+          m.bindPopup(() => popupGroupe(groupe), bulle)
+        }
         markers.addLayer(m)
-        plotted++
+        plotted += groupe.length
       }
       nbEvenements = plotted
       peindreCompteur()
@@ -613,6 +649,53 @@ export async function viewMap() {
     open.addEventListener('click', ouvrir)
     corps.appendChild(open)
     box.appendChild(corps)
+    return box
+  }
+
+  /**
+   * La bulle d'un repère qui réunit PLUSIEURS événements : leur liste, du plus
+   * proche au plus lointain ; chaque ligne ouvre sa fiche.
+   */
+  function popupGroupe(evs) {
+    const box = el('div', 'bulle bulle--groupe')
+    const tete = el('div', 'bulle__tete')
+    tete.appendChild(el('strong', null, `${evs.length} événements ici`))
+    const villes = [...new Set(evs.map((e) => e.city || e.ville).filter(Boolean))]
+    if (villes.length === 1) tete.appendChild(el('span', null, villes[0]))
+    box.appendChild(tete)
+
+    const liste = el('div', 'bulle__liste')
+    for (const ev of evs) {
+      const ligne = el('button', 'bulle__ligne')
+      ligne.type = 'button'
+      const vignette = el('span', 'bulle__vignette')
+      if (ev.thumb_url) {
+        const img = el('img')
+        img.src = ev.thumb_url
+        img.alt = ''
+        img.loading = 'lazy'
+        img.addEventListener('error', () => img.remove())
+        vignette.appendChild(img)
+      } else {
+        vignette.textContent = '🎭'
+      }
+      const texte = el('span', 'bulle__ligne-texte')
+      const quand = new Date(ev.starts_at)
+      texte.appendChild(
+        el(
+          'span',
+          'bulle__quand',
+          `${quand.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })} · ${formatTime(ev.starts_at)}`
+        )
+      )
+      texte.appendChild(el('strong', 'bulle__ligne-titre', ev.title))
+      if (ev.place_name) texte.appendChild(el('span', 'bulle__ligne-lieu', ev.place_name))
+      const chevron = icon('chevronRight')
+      ligne.append(vignette, texte, chevron)
+      ligne.addEventListener('click', () => navigate('/evenement?id=' + ev.id))
+      liste.appendChild(ligne)
+    }
+    box.appendChild(liste)
     return box
   }
 

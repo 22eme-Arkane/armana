@@ -172,6 +172,12 @@
 .choix-lieu__option--adresse { flex-direction: column; align-items: flex-start; gap: 0.05rem; }
 .choix-lieu__option--adresse strong { overflow-wrap: anywhere; }
 .choix-lieu__option--adresse span { white-space: normal; }
+/* « Est-ce ce lieu ? » — la proposition tirée du nom du lieu (formulaire Publier). */
+.lieu-trouve { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.45rem; }
+.lieu-trouve:empty { display: none; }
+.lieu-trouve__titre { font-size: 0.8rem; font-weight: 800; color: #f4ca15; }
+.lieu-trouve .choix-lieu__option { border: 2px solid #f4ca15; }
+.choix-lieu__option .lieu-trouve__action { margin-top: 0.2rem; opacity: 1; color: #0b55c5; font-weight: 800; }
 .choix-lieu__repere-label { display: block; margin-top: 0.6rem; }
 .choix-lieu__carte {
   height: 190px;

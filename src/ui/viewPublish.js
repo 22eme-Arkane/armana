@@ -11,12 +11,13 @@ import { icon } from './icons.js'
 import { studioHeader } from './studio.js'
 import { navigate } from '../lib/router.js'
 import { isLoggedIn } from '../lib/auth.js'
-import { DEFAULT_CENTER } from '../lib/geo.js'
+import { DEFAULT_CENTER, haversineMeters } from '../lib/geo.js'
 import { chargerCommunesFrance, communeDansLeTexte, communeLaPlusProche } from '../lib/communes.js'
 import { getMaFiche } from '../lib/fiches.js'
 import { rechercheCommune } from './rechercheCommune.js'
 import { rechercheAdresse } from './rechercheAdresse.js'
 import { rueDeLEvenement } from '../lib/adresse.js'
+import { chercherAdresse } from '../lib/geocodage.js'
 import { demoActif } from '../lib/demo.js'
 import { menuEditeur } from './menuEditeur.js'
 import { foodTrucksAnnonces, foodTrucksValides, synchroniserFoodTrucks } from '../lib/foodTrucks.js'
@@ -722,6 +723,7 @@ export async function viewPublish({ query } = {}) {
       // Une commune choisie à la main recentre la carte sur elle ; on affine
       // ensuite par l'adresse, ou en touchant la carte.
       if (c) setPoint(c.lat, c.lng, true, { origine: 'commune' })
+      chercherLeLieu() // le nom du lieu était peut-être déjà saisi
       refreshPreview()
       saveSnapshot()
     },
@@ -754,15 +756,67 @@ export async function viewPublish({ query } = {}) {
     },
   })
   locWrap.appendChild(adresseChamp.wrap)
+
+  // ⚠ LE NOM DU LIEU SUFFIT SOUVENT À TROUVER L'ENDROIT (12/11/2026). Le champ
+  // d'adresse étant facultatif, beaucoup s'arrêtaient à la commune : deux
+  // événements d'une même ville tombaient au même point et se cachaient l'un
+  // l'autre sur la carte (« Swing Brassens » et « Muriel Robin » à La Ciotat,
+  // dans deux salles distantes de près de deux kilomètres). Dès que le nom du
+  // lieu et la commune sont là, on cherche donc tout seul, et on PROPOSE —
+  // jamais d'office : un homonyme poserait le repère au mauvais endroit.
+  const lieuTrouve = el('div', 'lieu-trouve')
+  locWrap.appendChild(lieuTrouve)
+  let attenteLieu = null
+  let rechercheLieu = null
+  function chercherLeLieu() {
+    clearTimeout(attenteLieu)
+    rechercheLieu?.abort()
+    lieuTrouve.innerHTML = ''
+    const nom = placeInput.value.trim()
+    const commune = communeChoisie
+    if (adresseChoisie || !commune || nom.length < 4) return
+    attenteLieu = setTimeout(async () => {
+      const moi = new AbortController()
+      rechercheLieu = moi
+      let trouvees
+      try {
+        trouvees = await chercherAdresse(nom, { pres: commune, limite: 4, signal: moi.signal })
+      } catch {
+        return // service muet : le champ d'adresse et la carte restent là
+      }
+      if (moi.signal.aborted || adresseChoisie || communeChoisie !== commune) return
+      // Seulement ce qui est vraiment là : dans la commune ou tout près.
+      const proches = trouvees
+        .filter((a) => haversineMeters(a, commune) < 15000 && (a.lieu || a.rue))
+        .slice(0, 2)
+      if (!proches.length) return
+      lieuTrouve.appendChild(el('span', 'lieu-trouve__titre', proches.length > 1 ? 'Est-ce l’un de ces lieux ?' : 'Est-ce ce lieu ?'))
+      for (const a of proches) {
+        const b = el('button', 'choix-lieu__option choix-lieu__option--adresse')
+        b.type = 'button'
+        b.appendChild(el('strong', null, a.titre))
+        b.appendChild(
+          el('span', null, [a.lieu && a.rue ? a.rue : '', [a.cp, a.ville].filter(Boolean).join(' ')].filter(Boolean).join(' · '))
+        )
+        b.appendChild(el('span', 'lieu-trouve__action', 'Placer le repère ici'))
+        b.addEventListener('click', () => adresseChamp.choisir(a))
+        lieuTrouve.appendChild(b)
+      }
+    }, 700)
+  }
+  placeInput.addEventListener('input', chercherLeLieu)
+
   const aideAdresse = el(
     'p',
     'form__hint',
     'Facultatif. Tapez le numéro et la rue, puis choisissez : le repère se pose tout seul au bon endroit.'
   )
   locWrap.appendChild(aideAdresse)
-  /** Le mode d'emploi n'a plus rien à dire une fois l'adresse choisie. */
+  /** Le mode d'emploi n'a plus rien à dire une fois l'adresse choisie — et la
+   *  proposition de lieu non plus ; sans adresse, on la relance. */
   function majAideAdresse() {
     aideAdresse.style.display = adresseChoisie ? 'none' : ''
+    chercherLeLieu()
   }
 
   const coordReadout = el('p', 'form__hint lieu-repere__aide')
@@ -784,6 +838,22 @@ export async function viewPublish({ query } = {}) {
       AIDE_REPERE[origineRepere] ?? 'Choisissez la commune : le repère se posera sur la carte.'
   }
   majAideRepere()
+
+  /**
+   * Prévient UNE fois que le repère est resté au centre de la commune, puis
+   * laisse passer : une fête de village n'a pas d'adresse, mais la plupart des
+   * salles en ont une — et deux événements au même point se cachent sur la carte.
+   */
+  let avertiCentre = false
+  function alerteCentre() {
+    if (origineRepere !== 'commune' || avertiCentre) return null
+    avertiCentre = true
+    return (
+      'Le repère est encore au centre de la commune. Choisissez l’adresse ou un lieu proposé, ' +
+      'ou touchez la carte à l’endroit exact — sinon l’événement se superposera aux autres. ' +
+      'Pour continuer quand même, validez de nouveau.'
+    )
+  }
 
   /** Deux noms de commune sont-ils le même ? `null` si l'un manque (on ne sait pas). */
   function memeNom(a, b) {
@@ -859,6 +929,12 @@ export async function viewPublish({ query } = {}) {
         adresseChamp.choisir(adresseChoisie, true)
         majAideAdresse()
       }
+      // Un événement qu'on modifie et dont le repère est resté au centre de la
+      // commune : on le dit, et la proposition de lieu se lance d'elle-même.
+      if (existing && c && !adresseChoisie && haversineMeters({ lat, lng }, c) < 40) {
+        origineRepere = 'commune'
+        majAideRepere()
+      }
       if (init.place_name) placeInput.value = init.place_name
       else if (!init.city && init.address && c) {
         // Ancien événement : ce qui précède le code postal et la commune
@@ -890,6 +966,7 @@ export async function viewPublish({ query } = {}) {
         }
       }
     }
+    chercherLeLieu()
     refreshPreview()
   }
 
@@ -1262,7 +1339,7 @@ export async function viewPublish({ query } = {}) {
     { titre: 'Quand', champs: [fDesc.wrap, apercuDesc, fStart.wrap, fEnd.wrap, recurWrap] },
     // `verifier` : ce que le navigateur ne sait pas contrôler seul. Sans lui,
     // on découvrait à la DERNIÈRE étape que la commune manquait.
-    { titre: 'Où', champs: [locWrap], verifier: () => (communeChoisie ? null : 'Choisissez la commune dans la liste.') },
+    { titre: 'Où', champs: [locWrap], verifier: () => (communeChoisie ? alerteCentre() : 'Choisissez la commune dans la liste.') },
     { titre: 'Détails', champs: [paidWrap, restoWrap, fContact.wrap] },
   ]
   const guide = !existing
@@ -1574,6 +1651,9 @@ export async function viewPublish({ query } = {}) {
     if (!communeChoisie) return fail('Choisissez la commune dans la liste.')
     if (state.lat == null || state.lng == null)
       return fail('Placez le lieu sur la carte (touchez la carte).')
+    // (Déjà dit à l'étape « Où » du parcours guidé : ne se répète pas.)
+    const alerte = alerteCentre()
+    if (alerte) return fail(alerte)
     if (ends_at && ends_at < starts_at) return fail('La fin est avant le début.')
 
     // Répétition. Deux formes exclusives : les jours de la semaine sur une

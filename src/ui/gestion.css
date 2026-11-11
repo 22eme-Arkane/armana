@@ -11,7 +11,9 @@
    toucher aucun écran public. Ce qui vit dans une feuille (hors de la page)
    est préfixé `.g-feuille`. */
 
-.page--gestion { gap: 0.85rem; padding-bottom: 7rem; margin-bottom: -6rem; }
+/* (Le bleu jusqu'en bas de l'écran : règle commune aux sous-écrans bleus,
+   `.page--studio-blue.page--studio-sub` dans style.css.) */
+.page--gestion { gap: 0.85rem; }
 .page--gestion .g-pile { display: flex; flex-direction: column; gap: 0.85rem; }
 .page--gestion [hidden] { display: none !important; }
 
