@@ -10,7 +10,7 @@
 // l'écran. Seul l'espace du camion, qui n'existe que grâce à elle, lève.
 import { supabase } from './supabaseClient.js'
 import { ecrirePoint, lirePoint } from './point.js'
-import { demoActif, demoPlanning, demoPresences, demoPresencesPeriode } from './demo.js'
+import { demoActif, demoGestion, demoPlanning, demoPresences, demoPresencesPeriode } from './demo.js'
 
 export const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 export const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
@@ -84,6 +84,30 @@ export function etatPlanning(confirmeLe, r) {
   if (jours >= r.ft_masquage_jours) return { etat: 'masque', jours }
   if (jours >= r.ft_rappel_jours) return { etat: 'rappel', jours }
   return { etat: 'actif', jours }
+}
+
+/**
+ * Suivi des food trucks PUBLIÉS, pour la modération : la dernière confirmation
+ * de chacun et ses signalements « Pas là » des sept derniers jours.
+ * Renvoie [] sans la migration 0034 — l'écran masque alors l'onglet.
+ * @returns {Promise<Array<{id:string,name:string,dept:string|null,last_confirmed_at:string,signalements:number}>>}
+ */
+export async function suiviFoodTrucks() {
+  if (demoActif()) return (await demoGestion()).suiviFoodTrucks()
+  const ilYA7j = new Date(Date.now() - 7 * 86400000).toLocaleDateString('en-CA')
+  const [trucks, reports] = await Promise.all([
+    supabase
+      .from('fiches')
+      .select('id, name, dept, last_confirmed_at')
+      .eq('kind', 'food_truck')
+      .eq('status', 'approved')
+      .order('name'),
+    supabase.from('food_truck_reports').select('truck_id, report_date').gte('report_date', ilYA7j),
+  ])
+  if (trucks.error) return []
+  const nb = new Map()
+  for (const s of reports.data ?? []) nb.set(s.truck_id, (nb.get(s.truck_id) ?? 0) + 1)
+  return trucks.data.map((t) => ({ ...t, signalements: nb.get(t.id) ?? 0 }))
 }
 
 // --- Espace du camion -----------------------------------------------------------

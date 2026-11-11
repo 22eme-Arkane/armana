@@ -8,6 +8,7 @@ import { isLoggedIn, isAdmin, getProfile, getUser, signOut } from '../lib/auth.j
 import { amIOwner } from '../lib/admins.js'
 import { listModeratorRequests, myPendingCount } from '../lib/moderation.js'
 import { countFeedback } from '../lib/feedback.js'
+import { demoActif } from '../lib/demo.js'
 import { currentBuild } from '../lib/update.js'
 import { studioHeader, boutonPartage } from './studio.js'
 
@@ -90,11 +91,14 @@ export async function viewSettings() {
   // événement » : c'est un appel à rejoindre le projet, le cacher à ceux qui
   // n'ont pas encore de compte revenait à ne le proposer qu'à ceux qui sont
   // déjà là. L'écran invite alors à s'inscrire.
-  if (!isAdmin()) {
+  // `demoActif()` : en local, avec `?demo=1`, on relit les écrans de gestion
+  // comme le propriétaire, sur de fausses données (lib/demo.js).
+  const gestion = (logged && isAdmin()) || demoActif()
+  if (!gestion) {
     adm.appendChild(rowNav(icon('shield'), 'Devenir modérateur', '/devenir-moderateur'))
   }
 
-  if (logged && isAdmin()) {
+  if (gestion) {
     const owner = await amIOwner()
     // Tous les compteurs en parallèle : inutile d'attendre l'un puis l'autre.
     const [pending, messages, demandes] = await Promise.all([

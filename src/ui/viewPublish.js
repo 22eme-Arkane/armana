@@ -15,6 +15,9 @@ import { DEFAULT_CENTER } from '../lib/geo.js'
 import { chargerCommunesFrance, communeDansLeTexte, communeLaPlusProche } from '../lib/communes.js'
 import { getMaFiche } from '../lib/fiches.js'
 import { rechercheCommune } from './rechercheCommune.js'
+import { rechercheAdresse } from './rechercheAdresse.js'
+import { rueDeLEvenement } from '../lib/adresse.js'
+import { demoActif } from '../lib/demo.js'
 import { menuEditeur } from './menuEditeur.js'
 import { foodTrucksAnnonces, foodTrucksValides, synchroniserFoodTrucks } from '../lib/foodTrucks.js'
 import './planning.css'
@@ -60,7 +63,9 @@ function toolButton(label, title) {
 }
 
 export async function viewPublish({ query } = {}) {
-  if (!isLoggedIn()) {
+  // (Démonstration : le formulaire se relit sans compte — l'envoi, lui,
+  // échouerait en base faute de session. Voir lib/demo.js.)
+  if (!isLoggedIn() && !demoActif()) {
     const wrap = el('section', 'page page--studio-sub')
     wrap.appendChild(studioHeader('Publier', { backTo: '/parametres' }))
     wrap.appendChild(loginPrompt('Connectez-vous pour publier un événement.'))
@@ -702,27 +707,126 @@ export async function viewPublish({ query } = {}) {
   )
   locWrap.appendChild(el('span', 'form__label lieu-commune__label', 'Commune *'))
   let communeChoisie = null
+  /** L'adresse précise choisie (lib/geocodage.js), ou null. */
+  let adresseChoisie = null
   const communeChamp = rechercheCommune({
     onChoix: (c) => {
       communeChoisie = c
+      // Une adresse précise appartient à SA commune : en changer la retire,
+      // sinon on enregistrerait « 12 rue des Cordeliers » à trente kilomètres.
+      if (adresseChoisie && (!c || memeNom(c.nom, adresseChoisie.ville) === false)) {
+        adresseChoisie = null
+        adresseChamp.choisir(null, true)
+        majAideAdresse()
+      }
       // Une commune choisie à la main recentre la carte sur elle ; on affine
-      // ensuite en touchant la carte.
-      if (c) setPoint(c.lat, c.lng)
+      // ensuite par l'adresse, ou en touchant la carte.
+      if (c) setPoint(c.lat, c.lng, true, { origine: 'commune' })
       refreshPreview()
       saveSnapshot()
     },
   })
   locWrap.appendChild(communeChamp.wrap)
-  const coordReadout = el('p', 'form__hint', 'Touchez la carte pour placer le lieu exact.')
+
+  // ⚠ ADRESSE PRÉCISE (retour d'une utilisatrice, 11/11/2026). Le formulaire
+  // ne connaissait que la commune : le repère tombait au centre du village, et
+  // il fallait le replacer au doigt sur la petite carte — faute de quoi
+  // « Y aller » menait à la mairie. On la cherche désormais, et le repère se
+  // pose tout seul. Facultative : la carte reste là pour un pré, une place…
+  locWrap.appendChild(el('span', 'form__label lieu-commune__label', 'Adresse précise'))
+  const adresseChamp = rechercheAdresse({
+    pres: () => communeChoisie,
+    onChoix: (a) => {
+      adresseChoisie = a
+      if (a) {
+        setPoint(a.lat, a.lng, true, { zoom: 17, origine: 'adresse' })
+        // Un lieu trouvé par son nom (« Théâtre … ») remplit le nom du lieu,
+        // s'il est encore vide — jamais par-dessus une saisie.
+        if (a.lieu && !placeInput.value.trim()) placeInput.value = a.lieu.slice(0, 120)
+        communeDeLAdresse(a)
+      } else if (communeChoisie) {
+        // Adresse retirée : le repère retourne au centre de la commune.
+        setPoint(communeChoisie.lat, communeChoisie.lng, true, { origine: 'commune' })
+      }
+      majAideAdresse()
+      refreshPreview()
+      saveSnapshot()
+    },
+  })
+  locWrap.appendChild(adresseChamp.wrap)
+  const aideAdresse = el(
+    'p',
+    'form__hint',
+    'Facultatif. Tapez le numéro et la rue, puis choisissez : le repère se pose tout seul au bon endroit.'
+  )
+  locWrap.appendChild(aideAdresse)
+  /** Le mode d'emploi n'a plus rien à dire une fois l'adresse choisie. */
+  function majAideAdresse() {
+    aideAdresse.style.display = adresseChoisie ? 'none' : ''
+  }
+
+  const coordReadout = el('p', 'form__hint lieu-repere__aide')
   locWrap.appendChild(coordReadout)
   const pickMap = el('div', 'map map--pick')
   locWrap.appendChild(pickMap)
 
-  /** L'adresse écrite, recomposée : « Théâtre La Rirette, 04300 Mane ».
-   *  Elle reste en base pour les anciens téléphones, l'itinéraire et le partage. */
+  /** D'où vient le repère — c'est ce qui dit à l'auteur s'il lui reste à l'affiner. */
+  let origineRepere = null
+  const AIDE_REPERE = {
+    commune:
+      'Le repère est au centre de la commune. Indiquez l’adresse ci-dessus, ou touchez la carte à l’endroit exact : c’est là que « Y aller » conduira.',
+    adresse: 'Repère posé sur l’adresse. Touchez la carte si vous voulez l’ajuster.',
+    main: 'Repère placé à la main. Touchez la carte ailleurs pour le déplacer.',
+    enregistre: 'Voici le repère enregistré. Touchez la carte pour le déplacer.',
+  }
+  function majAideRepere() {
+    coordReadout.textContent =
+      AIDE_REPERE[origineRepere] ?? 'Choisissez la commune : le repère se posera sur la carte.'
+  }
+  majAideRepere()
+
+  /** Deux noms de commune sont-ils le même ? `null` si l'un manque (on ne sait pas). */
+  function memeNom(a, b) {
+    if (!a || !b) return null
+    const plat = (t) => String(t).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    return plat(a) === plat(b)
+  }
+
+  /** L'adresse choisie donne aussi la commune : inutile de la choisir à part
+   *  (et elle corrige une commune choisie par erreur). */
+  async function communeDeLAdresse(a) {
+    if (communeChoisie && memeNom(communeChoisie.nom, a.ville)) return
+    let communes
+    try {
+      communes = await chargerCommunesFrance()
+    } catch {
+      return
+    }
+    if (adresseChoisie !== a) return // on a changé d'avis entre-temps
+    const c =
+      communes.find((x) => memeNom(x.nom, a.ville) && (!a.cp || x.cp === a.cp)) ||
+      communeDansLeTexte(communes, `${a.cp} ${a.ville}`, a.lat, a.lng) ||
+      communeLaPlusProche(communes, a.lat, a.lng)
+    if (!c) return
+    communeChoisie = c
+    communeChamp.choisir(c, true)
+    refreshPreview()
+    saveSnapshot()
+  }
+
+  /** L'adresse écrite, recomposée : « Théâtre La Rirette, 12 Rue des
+   *  Cordeliers, 04300 Mane ». Elle reste en base pour les anciens téléphones,
+   *  l'itinéraire et le partage ; la rue n'a pas d'autre colonne (voir
+   *  rueDeLEvenement, lib/adresse.js). */
   function adresseComposee() {
     const c = communeChoisie
-    return [placeInput.value.trim(), c ? [c.cp, c.nom].filter(Boolean).join(' ') : ''].filter(Boolean).join(', ')
+    return [
+      placeInput.value.trim(),
+      adresseChoisie?.rue || '',
+      c ? [c.cp, c.nom].filter(Boolean).join(' ') : '',
+    ]
+      .filter(Boolean)
+      .join(', ')
   }
 
   /** Pré-remplit la commune (et le nom du lieu) d'un événement existant, d'un
@@ -745,7 +849,15 @@ export async function viewPublish({ query } = {}) {
         communeChoisie = c
         communeChamp.choisir(c, true)
         // Message importé : une ville, pas encore de point.
-        if (state.lat == null) setPoint(c.lat, c.lng)
+        if (state.lat == null) setPoint(c.lat, c.lng, true, { origine: 'commune' })
+      }
+      // L'adresse précise d'un événement qu'on modifie : on la remontre telle
+      // quelle, sans toucher au repère enregistré.
+      const rue = rueDeLEvenement(init)
+      if (rue && !adresseChoisie && Number.isFinite(lat) && Number.isFinite(lng)) {
+        adresseChoisie = { titre: rue, rue, lieu: '', cp: c?.cp || '', ville: init.city || c?.nom || '', lat, lng }
+        adresseChamp.choisir(adresseChoisie, true)
+        majAideAdresse()
       }
       if (init.place_name) placeInput.value = init.place_name
       else if (!init.city && init.address && c) {
@@ -770,7 +882,11 @@ export async function viewPublish({ query } = {}) {
         if (c) {
           communeChoisie = c
           communeChamp.choisir(c, true)
-          if (state.lat == null) setPoint(fiche.lat ?? c.lat, fiche.lng ?? c.lng)
+          if (state.lat == null) {
+            setPoint(fiche.lat ?? c.lat, fiche.lng ?? c.lng, true, {
+              origine: fiche.lat != null ? 'enregistre' : 'commune',
+            })
+          }
         }
       }
     }
@@ -791,14 +907,22 @@ export async function viewPublish({ query } = {}) {
     fPhoto.appendChild(
       el('p', 'form__hint', `📷 Photo importée depuis le partage. Choisissez un fichier pour la remplacer.`)
     )
-  } else if (existing?.photo_url) {
-    fPhoto.appendChild(el('p', 'form__hint', 'Une photo existe déjà ; en choisir une nouvelle la remplace.'))
   }
 
   /** Une entrée par jour : { file, crop }. Les trous sont permis. */
   const photos = []
   let slotActif = 0
   let slots = []
+
+  // ⚠ MODIFICATION : LES PHOTOS DÉJÀ EN LIGNE SE VOIENT (retour d'une
+  // utilisatrice, 11/11/2026 : « je dois remettre la photo à chaque fois »).
+  // Elles n'étaient jamais perdues — on n'envoie que les emplacements où un
+  // fichier a été choisi — mais rien ne le montrait : l'aperçu restait vide et
+  // le champ « Parcourir » affichait « Aucun fichier choisi ». On les montre
+  // donc, emplacement par emplacement, avec un bouton « Changer ».
+  const photosEnLigne = new Map((existing?.photos ?? []).map((p, i) => [p.position ?? i, p]))
+  /** Les miniatures locales (blob:) créées pour les emplacements, à libérer. */
+  const miniatures = new Map()
 
   /** Nombre d'affiches proposées = nombre de jours annoncés (borné). */
   function joursAnnonces() {
@@ -833,6 +957,58 @@ export async function viewPublish({ query } = {}) {
     }
   }
 
+  /** L'aperçu montre la photo DÉJÀ EN LIGNE de l'emplacement — la vignette,
+   *  donc exactement ce que l'agenda affiche. Rien à cadrer : elle l'est déjà. */
+  function afficherEnLigne(i) {
+    const p = photosEnLigne.get(i)
+    if (!p) return false
+    slotActif = i
+    framer.clear()
+    framingEnabled = false
+    previewImg.src = p.thumb_url || p.photo_url
+    previewMedia.classList.remove('poster-card__media--empty')
+    return true
+  }
+
+  /** Ce que porte l'emplacement i : une nouvelle photo, celle en ligne, ou rien. */
+  function etatEmplacement(i, input) {
+    const enLigne = photosEnLigne.get(i)
+    const nouvelle = photos[i]?.file
+    if (!enLigne && !nouvelle) return null
+    // Le champ « Parcourir » dirait « Aucun fichier choisi » alors qu'une photo
+    // est bien là : on le remplace par un état lisible. Il reste dans la page
+    // (c'est lui qui ouvre le sélecteur), simplement masqué.
+    input.style.display = 'none'
+    const etat = el('div', 'photo-actuelle')
+    const mini = el('img', 'photo-actuelle__mini')
+    mini.alt = ''
+    if (nouvelle) {
+      URL.revokeObjectURL(miniatures.get(i))
+      miniatures.set(i, URL.createObjectURL(nouvelle))
+      mini.src = miniatures.get(i)
+    } else {
+      mini.src = enLigne.thumb_url || enLigne.photo_url
+    }
+    const texte = el('span', 'photo-actuelle__texte')
+    texte.append(
+      el('strong', null, nouvelle ? 'Nouvelle photo' : 'Photo actuelle'),
+      el(
+        'span',
+        null,
+        nouvelle
+          ? enLigne
+            ? 'Elle remplacera l’actuelle à l’enregistrement.'
+            : 'Elle sera envoyée à l’enregistrement.'
+          : 'Elle est conservée : rien à refaire.'
+      )
+    )
+    const changer = el('button', 'btn btn--ghost btn--sm', 'Changer')
+    changer.type = 'button'
+    changer.addEventListener('click', () => input.click())
+    etat.append(mini, texte, changer)
+    return etat
+  }
+
   function construireEmplacements() {
     const n = joursAnnonces()
     if (slots.length === n) return
@@ -862,12 +1038,25 @@ export async function viewPublish({ query } = {}) {
           })
           photos[i] = { file, crop: null }
           await chargerDansApercu(i)
+          majEtat()
         } catch (e) {
           framingEnabled = false
           frameHint.textContent = 'Photo non utilisable : ' + e.message
         }
       })
       slot.appendChild(input)
+      // En modification seulement : en création, le champ « Parcourir » (qui
+      // affiche le nom du fichier choisi) reste tel que les gens le connaissent.
+      let etat = null
+      const majEtat = () => {
+        if (!existing) return
+        const neuf = etatEmplacement(i, input)
+        if (!neuf) return
+        if (etat) etat.replaceWith(neuf)
+        else slot.appendChild(neuf)
+        etat = neuf
+      }
+      majEtat()
       slotsBox.appendChild(slot)
       slots.push(input)
     }
@@ -917,6 +1106,8 @@ export async function viewPublish({ query } = {}) {
   }
   const framer = createPhotoFramer(previewMedia, previewImg)
   let framingEnabled = false
+  // En modification, l'aperçu s'ouvre sur la photo déjà en ligne.
+  if (photosEnLigne.size) afficherEnLigne(Math.min(...photosEnLigne.keys()))
 
   // Toucher l'aperçu ouvre le sélecteur de photo (demande de Matthieu) : c'est
   // le geste que tout le monde tente en premier. Le champ « Parcourir » reste
@@ -927,7 +1118,7 @@ export async function viewPublish({ query } = {}) {
   previewMedia.classList.add('poster-card__media--choisir')
   previewMedia.setAttribute('role', 'button')
   previewMedia.setAttribute('tabindex', '0')
-  previewMedia.setAttribute('aria-label', 'Ajouter une photo')
+  previewMedia.setAttribute('aria-label', photosEnLigne.size ? 'Changer la photo' : 'Ajouter une photo')
   const ouvrirSelecteur = () => {
     if (photos[slotActif]) return
     slots[slotActif]?.click()
@@ -987,7 +1178,10 @@ export async function viewPublish({ query } = {}) {
    *  plutôt que de laisser croire à un bug, on dit quoi faire pour l'obtenir. */
   function syncFrameUi() {
     if (!framingEnabled) {
-      frameHint.textContent = 'Choisissez une photo pour la cadrer ici.'
+      frameHint.textContent =
+        photosEnLigne.has(slotActif) && !photos[slotActif]
+          ? 'Voici la photo actuelle, telle que l’agenda l’affiche. Touchez-la pour en choisir une autre.'
+          : 'Choisissez une photo pour la cadrer ici.'
       return
     }
     const { pannableX, pannableY, whole } = framer.info()
@@ -1066,7 +1260,9 @@ export async function viewPublish({ query } = {}) {
   const ETAPES = [
     { titre: 'L’essentiel', champs: [fPhoto, fTitle.wrap, fCategory.wrap] },
     { titre: 'Quand', champs: [fDesc.wrap, apercuDesc, fStart.wrap, fEnd.wrap, recurWrap] },
-    { titre: 'Où', champs: [locWrap] },
+    // `verifier` : ce que le navigateur ne sait pas contrôler seul. Sans lui,
+    // on découvrait à la DERNIÈRE étape que la commune manquait.
+    { titre: 'Où', champs: [locWrap], verifier: () => (communeChoisie ? null : 'Choisissez la commune dans la liste.') },
     { titre: 'Détails', champs: [paidWrap, restoWrap, fContact.wrap] },
   ]
   const guide = !existing
@@ -1135,6 +1331,10 @@ export async function viewPublish({ query } = {}) {
         manquant.reportValidity()
         return
       }
+      const erreur = ETAPES[pageActive].verifier?.()
+      msg.className = erreur ? 'form__msg form__msg--err' : 'form__msg'
+      msg.textContent = erreur || ''
+      if (erreur) return
       montrer(pageActive + 1)
     })
     montrer(0)
@@ -1151,6 +1351,10 @@ export async function viewPublish({ query } = {}) {
     form.appendChild(recurWrap)
     form.appendChild(locWrap)
     form.appendChild(paidWrap)
+    // ⚠ Oublié jusqu'au 11/11/2026 : en modification, la restauration sur
+    // place (menu, food trucks) n'apparaissait pas — on ne pouvait la corriger
+    // qu'en recréant l'événement.
+    form.appendChild(restoWrap)
     form.appendChild(fContact.wrap)
     form.appendChild(submit)
     form.appendChild(msg)
@@ -1185,6 +1389,8 @@ export async function viewPublish({ query } = {}) {
           priceDetail: detailInput.value,
           placeName: placeInput.value,
           commune: communeChoisie,
+          adresse: adresseChoisie,
+          origineRepere,
           lat: state.lat,
           lng: state.lng,
         })
@@ -1232,6 +1438,12 @@ export async function viewPublish({ query } = {}) {
       if (saved.lat != null) {
         state.lat = saved.lat
         state.lng = saved.lng
+        origineRepere = saved.origineRepere ?? null
+      }
+      if (saved.adresse?.rue || saved.adresse?.titre) {
+        adresseChoisie = saved.adresse
+        adresseChamp.choisir(saved.adresse, true)
+        majAideAdresse()
       }
       const note = el('p', 'demo-note')
       note.textContent = '📝 Brouillon restauré — votre saisie a été conservée. '
@@ -1259,22 +1471,28 @@ export async function viewPublish({ query } = {}) {
   refreshPreview()
   if (draft) saveSnapshot() // l'import depuis un message est lui aussi protégé
 
-  function setPoint(lat, lng, recenter = true) {
+  /**
+   * Pose le repère. `origine` dit d'où il vient (commune · adresse · main ·
+   * enregistre) : le texte d'aide sous l'adresse s'y accorde. `zoom` : 14 pour
+   * une commune, 17 pour une adresse — on doit voir la rue.
+   */
+  function setPoint(lat, lng, recenter = true, { zoom = 14, origine = null } = {}) {
     state.lat = lat
     state.lng = lng
+    if (origine) origineRepere = origine
     saveSnapshot() // le lieu fait partie du brouillon persistant
-    coordReadout.textContent = `Coordonnées : ${lat.toFixed(5)}, ${lng.toFixed(5)}`
+    majAideRepere()
     if (!map) return
     if (!marker) {
       marker = L.marker([lat, lng], { draggable: true }).addTo(map)
       marker.on('dragend', () => {
         const p = marker.getLatLng()
-        setPoint(p.lat, p.lng, false)
+        setPoint(p.lat, p.lng, false, { origine: 'main' })
       })
     } else {
       marker.setLatLng([lat, lng])
     }
-    if (recenter) map.setView([lat, lng], 14)
+    if (recenter) map.setView([lat, lng], zoom)
   }
 
   // ⚠ setTimeout ET NON requestAnimationFrame. rAF est GELÉ quand l'onglet
@@ -1299,8 +1517,16 @@ export async function viewPublish({ query } = {}) {
       attribution:
         '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
     }).addTo(map)
-    if (state.lat != null) setPoint(state.lat, state.lng)
-    map.on('click', (e) => setPoint(e.latlng.lat, e.latlng.lng, false))
+    // Un repère déjà là (événement qu'on modifie, brouillon restauré) : on
+    // l'affiche de près s'il a été placé précisément, sans redire d'où il vient
+    // quand on le sait déjà.
+    if (state.lat != null) {
+      setPoint(state.lat, state.lng, true, {
+        zoom: existing || origineRepere === 'adresse' ? 16 : 14,
+        origine: origineRepere ?? 'enregistre',
+      })
+    }
+    map.on('click', (e) => setPoint(e.latlng.lat, e.latlng.lng, false, { origine: 'main' }))
     setTimeout(() => map.invalidateSize(), 100)
     // La commune (et le nom du lieu) d'un événement existant, d'un message
     // importé ou de la fiche de l'auteur. Plus de géocodage Nominatim : la

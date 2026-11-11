@@ -43,8 +43,15 @@ function aujourdhui() {
   return ((d.getDay() + 6) % 7) + 1
 }
 
+/**
+ * Les fausses données des écrans d'administration (lib/demoGestion.js),
+ * chargées à la demande : elles n'entrent pas dans le paquet principal.
+ * Usage : `if (demoActif()) return (await demoGestion()).listMembers()`.
+ */
+export const demoGestion = () => import('./demoGestion.js')
+
 /** Une image de remplacement (SVG) : aplat de couleur, camion, légende. */
-function image(fond, texte) {
+export function image(fond, texte) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
     <rect width="800" height="500" fill="${fond}"/>
     <g transform="translate(310 130) scale(7.5)" fill="none" stroke="#fff4df" stroke-width="1.6"

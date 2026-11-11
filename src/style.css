@@ -449,6 +449,21 @@ a.settings-row .settings-row__label { word-break: break-all; }
   font-size: 0.72rem; font-weight: 800; letter-spacing: 0.02em;
   text-transform: uppercase; color: var(--muted);
 }
+/* Modification d'un événement : la photo déjà en ligne (ou sa remplaçante),
+   à la place du champ « Parcourir » qui disait « Aucun fichier choisi ». */
+.photo-actuelle {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.45rem 0.55rem 0.45rem 0.45rem;
+  border-radius: 14px; background: #fff4df; color: #062b1d;
+}
+.photo-actuelle__mini {
+  flex: 0 0 auto; width: 54px; height: 54px;
+  border-radius: 10px; object-fit: cover; background: rgba(6, 43, 29, 0.08);
+}
+.photo-actuelle__texte { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.photo-actuelle__texte strong { font-size: 0.9rem; }
+.photo-actuelle__texte span { font-size: 0.76rem; opacity: 0.75; }
+.photo-actuelle .btn { flex: 0 0 auto; }
 
 /* Répétition hebdomadaire — pastilles L M M J V S D. */
 .recur { margin-top: 0.6rem; }
@@ -693,7 +708,9 @@ a.settings-row .settings-row__label { word-break: break-all; }
 .map { width: 100%; height: 58vh; min-height: 320px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
 /* min-height de .map (320px) neutralisé : sinon la mini-carte de sélection
    occupait tout l'écran en plein formulaire. */
-.map--pick { height: 240px; min-height: 240px; }
+/* `isolation` : les boutons +/− de Leaflet (z-index 1000) passaient PAR-DESSUS
+   la barre d'onglets quand la carte défilait dessous. */
+.map--pick { height: 240px; min-height: 240px; isolation: isolate; }
 .map-help { color: var(--muted); font-size: 0.78rem; margin: 0.4rem 0 0; }
 .leaflet-container { background: var(--surface-2); font-family: inherit; }
 .popup { color: #222; display: flex; flex-direction: column; gap: 0.25rem; min-width: 160px; }
@@ -786,6 +803,18 @@ a.settings-row .settings-row__label { word-break: break-all; }
   min-height: 100%;
 }
 .page--studio-blue .studio-head { margin-left: 0; margin-right: 0; }
+/* ⚠ SOUS-ÉCRANS BLEUS : leur conteneur n'a que 0,7rem de marge latérale
+   (`.content:has(.page--studio-sub)`), pas 1rem. Avec −1rem, la page dépassait
+   de 0,3rem de chaque côté et TOUT L'ÉCRAN glissait de 5 px à l'horizontale —
+   Faire un don, Mon territoire, écrans de gestion (mesuré le 11/11/2026 : page
+   large de 365 px dans un écran de 360). Le contenu ne bouge pas d'un pixel,
+   seul le débord disparaît. (La fiche événement a sa propre règle.) */
+.page--studio-blue.page--studio-sub:not(.fiche) {
+  margin-left: -0.7rem;
+  margin-right: -0.7rem;
+  padding-left: 0.7rem;
+  padding-right: 0.7rem;
+}
 /* ⚠ `.page--studio-blue.page--studio-sub` : deux classes sur le MÊME élément,
    pour battre `.page--studio-sub .page__subtitle` défini plus bas. Sans cela
    le sous-titre restait vert sur le bleu — donc invisible. */
@@ -2683,8 +2712,10 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
   box-shadow: 0 6px 18px rgba(6, 43, 29, 0.32);
 }
 /* Barre d'onglets « Soleil » (version C, choisie le 15/10/2026) : le jaune
-   d'Armana, coins hauts arrondis, sans trait ; l'onglet actif dans un carré
-   bleu, et le « + » de publication en carré bleu penché qui dépasse au centre. */
+   d'Armana, coins hauts arrondis, sans trait, et le « + » de publication en
+   carré bleu penché qui dépasse au centre.
+   Icônes refaites le 12/11/2026 (ui/navIcones.js) : au trait bleu, PLEINES
+   quand l'onglet est actif — le carré bleu derrière l'onglet actif a disparu. */
 .bottom-nav--studio {
   overflow: visible;
   background: var(--mask-yellow, #f4ca15);
@@ -2695,22 +2726,40 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
 .bottom-nav--studio .bottom-nav__inner { max-width: 480px; align-items: center; }
 /* Contraste : encre verte pleine opacité, jamais le vert clair sur jaune
    (2,2:1, illisible — mesuré lors de la version précédente). */
-.bottom-nav--studio .navtab { color: #064f36; opacity: 1; gap: 2px; }
+.bottom-nav--studio .navtab {
+  color: #064f36;
+  opacity: 1;
+  gap: 2px;
+  /* Les couleurs des icônes — voir la légende dans ui/navIcones.js.
+     ⚠ L'accent est BLANC : du jaune sur la barre jaune ne se verrait pas. */
+  --o-trait: #0b55c5;
+  --o-fond: transparent;
+  --o-detail: #0b55c5;
+  --o-accent: #fff;
+  --o-repere: var(--mask-yellow, #f4ca15);
+  --o-repere-trait: #0b55c5;
+}
 .bottom-nav--studio .navtab__icone {
   display: grid;
   place-items: center;
   width: 44px;
   height: 32px;
-  border-radius: 11px;
-  transition: background-color 0.18s ease, color 0.18s ease;
+  transition: transform 0.18s ease;
 }
-.bottom-nav--studio .navtab svg { width: 23px; height: 23px; }
+/* `overflow` : l'étincelle du favori et le repère de la carte frôlent le bord
+   de la grille ; l'agrandissement de l'onglet actif ne doit pas les rogner. */
+.bottom-nav--studio .navtab svg { width: 27px; height: 27px; overflow: visible; }
 .bottom-nav--studio .navtab__label { font-size: 0.68rem; font-weight: 600; }
-.bottom-nav--studio .navtab.is-active { color: var(--studio-blue, #0b55c5); }
-.bottom-nav--studio .navtab.is-active .navtab__icone {
-  background: var(--studio-blue, #0b55c5);
-  color: #fff;
+/* L'onglet actif : l'icône se remplit, et ses traits intérieurs prennent la
+   couleur de la barre pour rester visibles sur le bleu. */
+.bottom-nav--studio .navtab.is-active {
+  color: var(--studio-blue, #0b55c5);
+  --o-fond: #0b55c5;
+  --o-detail: var(--mask-yellow, #f4ca15);
+  --o-repere: #fff;
+  --o-repere-trait: var(--mask-yellow, #f4ca15);
 }
+.bottom-nav--studio .navtab.is-active .navtab__icone { transform: scale(1.1); }
 .bottom-nav--studio .navtab.is-active .navtab__label { font-weight: 800; }
 
 /* Le « + » central. ⚠ Le carré est penché, PAS le pictogramme : on le

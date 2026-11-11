@@ -1,9 +1,14 @@
 // Armana — gestion des administrateurs (réservé aux admins, via RPC).
+//
+// `demoActif()` (lib/demo.js) : en local ou sur une préversion, avec `?demo=1`,
+// les lectures renvoient de fausses données pour relire les écrans sans compte.
 import { supabase } from './supabaseClient.js'
 import { getUser } from './auth.js'
+import { demoActif, demoGestion } from './demo.js'
 
 /** Liste des admins (nom + e-mail). Nécessite d'être admin (garanti côté base). */
 export async function listAdmins() {
+  if (demoActif()) return (await demoGestion()).listAdmins()
   const { data, error } = await supabase.rpc('list_admins')
   if (error) throw error
   return data ?? []
@@ -39,6 +44,7 @@ export async function setAdminById(id, makeAdmin) {
  * lue que lorsqu'un administrateur ouvre délibérément une fiche.
  */
 export async function getMemberProfile(id) {
+  if (demoActif()) return (await demoGestion()).memberProfile(id)
   const { data, error } = await supabase.rpc('member_profile', { p_id: id })
   if (error) throw error
   return data?.[0] ?? null
@@ -52,6 +58,7 @@ export async function getMemberProfile(id) {
 let ownerPromise = null
 
 export function amIOwner() {
+  if (demoActif()) return Promise.resolve(true)
   if (!ownerPromise) {
     ownerPromise = supabase
       .rpc('am_i_owner')
@@ -66,11 +73,43 @@ export function resetOwnerCache() {
   ownerPromise = null
 }
 
-/** Journal des actions d'administration (propriétaire uniquement). */
-export async function listAdminActions(max = 200) {
-  const { data, error } = await supabase.rpc('list_admin_actions', { max_rows: max })
-  if (error) throw error
-  return data ?? []
+/**
+ * Journal des actions d'administration (propriétaire uniquement).
+ *
+ * Depuis la migration 0040, la base pagine et filtre elle-même :
+ *   · `avant`     — identifiant du plus ancien acte déjà chargé (la suite) ;
+ *   · `acteur`    — un seul modérateur (son identifiant) ;
+ *   · `actions`   — les types d'acte retenus (voir CATEGORIES, lib/journal.js) ;
+ *   · `recherche` — dans le nom de la cible, sans casse ni accents.
+ *
+ * ⚠ Sans la migration, la fonction en base ne connaît que `max_rows` : on
+ * retombe sur l'ancien appel (les 200 dernières lignes, sans identifiants) et
+ * `paginable` passe à false — l'écran filtre alors lui-même et ne propose pas
+ * « plus anciennes ».
+ * @returns {Promise<object[]>} lignes, avec `.paginable` posé sur le tableau
+ */
+export async function listAdminActions({ max = 100, avant = null, acteur = null, actions = null, recherche = '' } = {}) {
+  if (demoActif()) {
+    const lignes = (await demoGestion()).listAdminActions({ max, avant, acteur, actions, recherche })
+    lignes.paginable = true
+    return lignes
+  }
+  let r = await supabase.rpc('list_admin_actions', {
+    max_rows: max,
+    p_before: avant,
+    p_actor: acteur,
+    p_actions: actions,
+    p_search: recherche.trim() || null,
+  })
+  let paginable = true
+  if (r.error && (r.error.code === 'PGRST202' || /could not find the function/i.test(r.error.message))) {
+    paginable = false
+    r = avant ? { data: [], error: null } : await supabase.rpc('list_admin_actions', { max_rows: 200 })
+  }
+  if (r.error) throw r.error
+  const lignes = r.data ?? []
+  lignes.paginable = paginable
+  return lignes
 }
 
 /**
@@ -80,6 +119,7 @@ export async function listAdminActions(max = 200) {
  * aspirable avec la clé publique présente dans le bundle.
  */
 export async function listMembers() {
+  if (demoActif()) return (await demoGestion()).listMembers()
   const { data, error } = await supabase.rpc('list_members')
   if (error) throw error
   return data ?? []
@@ -90,6 +130,7 @@ export async function listMembers() {
  * pour sa fiche. Le propriétaire est modérateur : la RLS les lui montre.
  */
 export async function listMemberEvents(id, max = 8) {
+  if (demoActif()) return (await demoGestion()).listMemberEvents(id)
   const { data, error } = await supabase
     .from('events_geo')
     .select('id, title, starts_at, ends_at, status')
@@ -102,6 +143,7 @@ export async function listMemberEvents(id, max = 8) {
 
 /** Ce qui attend, département par département (migration 0037). */
 export async function moderationCoverage() {
+  if (demoActif()) return (await demoGestion()).moderationCoverage()
   const { data, error } = await supabase.rpc('moderation_coverage')
   if (error) throw error
   return data ?? []
@@ -117,6 +159,7 @@ export async function moderationCoverage() {
  * @param {(etape:string)=>void} [onEtape]
  */
 export async function deleteMember(id, onEtape) {
+  if (demoActif()) return (await demoGestion()).deleteMember(id)
   onEtape?.('Recherche de ses photos…')
   const { data: fichiers, error: e1 } = await supabase.rpc('member_storage_paths', { p_id: id })
   if (e1) throw e1

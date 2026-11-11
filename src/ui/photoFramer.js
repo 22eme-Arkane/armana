@@ -192,6 +192,21 @@ export function createPhotoFramer(box, img) {
       centerCrop()
       apply()
     },
+    /**
+     * Vide le cadreur : l'aperçu montre autre chose qu'un fichier à cadrer (la
+     * photo déjà en ligne d'un événement qu'on modifie). L'image retrouve le
+     * style de la carte — sans cela, les dimensions posées par `apply()`
+     * resteraient collées à la photo suivante.
+     */
+    clear() {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      objectUrl = null
+      state.w = 0
+      state.h = 0
+      img.onload = null
+      img.onerror = null
+      for (const p of ['position', 'maxWidth', 'objectFit', 'width', 'height', 'left', 'top']) img.style[p] = ''
+    },
     zoomBy(factor) {
       setZoom(state.zoom * factor)
     },

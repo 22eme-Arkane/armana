@@ -98,6 +98,21 @@ export function resumeTerritoire(codes) {
   return morceaux.join(', ')
 }
 
+/**
+ * La même chose, mais sans numéro nu : « Bretagne, 31 Haute-Garonne ». Pour
+ * les écrans de gestion, où un numéro seul ne dit rien à qui n'est pas du coin.
+ */
+export function zoneEnClair(codes) {
+  const morceaux = []
+  for (const r of REGIONS) {
+    const siens = r.depts.filter((d) => codes.includes(d.code))
+    if (!siens.length) continue
+    if (siens.length === r.depts.length) morceaux.push(r.nom)
+    else morceaux.push(...siens.map((d) => `${d.code} ${d.nom}`))
+  }
+  return morceaux.join(', ')
+}
+
 const parRegion = new Map()
 
 function chargerRegion(code) {

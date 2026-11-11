@@ -1,31 +1,23 @@
 // Armana — écran « Membres » (modérateurs et propriétaire).
 //
-// Refonte du 16/10/2026 (Matthieu) : savoir d'un coup d'œil QUI est inscrit —
-// particulier, lieu culturel ou food truck —, filtrer par type, trier par date,
-// par prénom ou par nom, et des chiffres en tête.
+// Savoir d'un coup d'œil QUI est inscrit — particulier, lieu culturel ou food
+// truck —, chercher, filtrer par type, trier par date, par prénom ou par nom,
+// avec les chiffres en tête. Refonte visuelle du 11/11/2026 : la grammaire des
+// écrans de gestion (ui/gestion.js), sur fond bleu.
 //
 // La LISTE est ouverte aux modérateurs (migration 0022) : elle ne contient
 // aucune adresse e-mail. La FICHE d'un membre, elle, en expose une et reste
 // réservée au propriétaire — d'où `owner`, qui décide si les lignes s'ouvrent.
-import './admin.css'
-import { el, emptyState } from './components.js'
+import { el } from './components.js'
 import { icon } from './icons.js'
-import { studioHeader } from './studio.js'
+import { chiffres, depuis, joursDepuis, note, pageGestion, pastilles, recherche, vide } from './gestion.js'
 import { navigate } from '../lib/router.js'
 import { isAdmin, getUser } from '../lib/auth.js'
 import { amIOwner, listMembers } from '../lib/admins.js'
+import { demoActif } from '../lib/demo.js'
 import { avatarMembre, initiales as initialesCommunes, typeVisuel } from './typeCompte.js'
 
-const DTF = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
 const MOIS = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' })
-
-const FILTRES = [
-  { cle: 'tous', texte: 'Tous' },
-  { cle: 'particulier', texte: 'Particuliers' },
-  { cle: 'lieu', texte: 'Lieux' },
-  { cle: 'food_truck', texte: 'Food trucks' },
-  { cle: 'moderateurs', texte: 'Modérateurs' },
-]
 
 const TRIS = [
   { cle: 'recents', texte: 'Récents' },
@@ -35,16 +27,18 @@ const TRIS = [
 
 const ETATS_FICHE = { pending: 'fiche à valider', approved: 'fiche publiée', rejected: 'fiche refusée' }
 
+/** Inscrit depuis moins de sept jours : étiquette « nouveau ». */
+const JOURS_NOUVEAU = 7
+
 // Le filtre et le tri survivent au passage par une fiche : on revient sur la
 // liste telle qu'on l'avait laissée (le temps de la visite seulement).
 const memoire = { filtre: 'tous', tri: 'recents', recherche: '' }
 
 export async function viewMembers() {
-  const wrap = el('section', 'page page--studio-sub page--admin')
-  wrap.appendChild(studioHeader('Membres', { backTo: '/parametres' }))
+  const wrap = pageGestion('Membres')
 
-  if (!isAdmin()) {
-    wrap.appendChild(emptyState('Réservé aux modérateurs.'))
+  if (!isAdmin() && !demoActif()) {
+    wrap.appendChild(vide('Réservé aux modérateurs.'))
     return wrap
   }
   const owner = await amIOwner().catch(() => false)
@@ -53,7 +47,7 @@ export async function viewMembers() {
   try {
     tous = await listMembers()
   } catch (e) {
-    wrap.appendChild(emptyState('Chargement impossible : ' + e.message))
+    wrap.appendChild(vide('Chargement impossible : ' + e.message))
     return wrap
   }
 
@@ -62,60 +56,47 @@ export async function viewMembers() {
   debutMois.setDate(1)
   debutMois.setHours(0, 0, 0, 0)
   const compte = (pred) => tous.filter(pred).length
-  const tuiles = el('div', 'admin-tuiles')
-  const tuile = (n, texte) => {
-    const t = el('div', 'admin-tuile')
-    t.append(el('strong', null, String(n)), el('span', null, texte))
-    return t
-  }
-  tuiles.append(
-    tuile(tous.length, 'inscrits'),
-    tuile('+' + compte((m) => new Date(m.created_at) >= debutMois), 'ce mois'),
-    tuile(compte((m) => m.account_type === 'lieu'), 'lieux'),
-    tuile(compte((m) => m.account_type === 'food_truck'), 'food trucks')
+  const typeDe = (m) => m.account_type || 'particulier'
+  wrap.appendChild(
+    chiffres([
+      { valeur: tous.length, libelle: 'inscrits' },
+      { valeur: '+' + compte((m) => new Date(m.created_at) >= debutMois), libelle: 'ce mois' },
+      { valeur: compte((m) => typeDe(m) === 'lieu'), libelle: 'lieux' },
+      { valeur: compte((m) => typeDe(m) === 'food_truck'), libelle: 'food trucks' },
+    ])
   )
-  wrap.appendChild(tuiles)
 
   // --- Recherche, filtres, tri ---------------------------------------------------
-  const rechercheChamp = el('label', 'admin-recherche')
-  rechercheChamp.appendChild(icon('search'))
-  const recherche = el('input')
-  recherche.type = 'search'
-  recherche.placeholder = 'Chercher un nom…'
-  recherche.autocomplete = 'off'
-  recherche.value = memoire.recherche
-  recherche.setAttribute('aria-label', 'Chercher un membre')
-  rechercheChamp.appendChild(recherche)
-  wrap.appendChild(rechercheChamp)
+  const champ = recherche('Chercher un nom…', 'Chercher un membre')
+  champ.input.value = memoire.recherche
+  wrap.appendChild(champ)
 
-  const filtres = el('div', 'admin-chips')
-  filtres.setAttribute('role', 'radiogroup')
-  filtres.setAttribute('aria-label', 'Type de compte')
-  const boutonsFiltre = FILTRES.map((f) => {
-    const n =
-      f.cle === 'tous'
-        ? tous.length
-        : f.cle === 'moderateurs'
-          ? compte((m) => m.role === 'admin' || m.is_owner)
-          : compte((m) => (m.account_type || 'particulier') === f.cle)
-    const b = el('button', 'admin-chip')
-    b.type = 'button'
-    b.setAttribute('role', 'radio')
-    b.append(el('span', null, f.texte), el('span', 'admin-chip__n', String(n)))
-    b.addEventListener('click', () => {
-      memoire.filtre = f.cle
-      peindre()
-    })
-    filtres.appendChild(b)
-    return { b, cle: f.cle }
-  })
-  wrap.appendChild(filtres)
+  wrap.appendChild(
+    pastilles(
+      [
+        { cle: 'tous', texte: 'Tous', n: tous.length },
+        { cle: 'particulier', texte: 'Particuliers', n: compte((m) => typeDe(m) === 'particulier') },
+        { cle: 'lieu', texte: 'Lieux', n: compte((m) => typeDe(m) === 'lieu') },
+        { cle: 'food_truck', texte: 'Food trucks', n: compte((m) => typeDe(m) === 'food_truck') },
+        { cle: 'moderateurs', texte: 'Modérateurs', n: compte((m) => m.role === 'admin' || m.is_owner) },
+      ],
+      {
+        actif: memoire.filtre,
+        file: true,
+        onChange: (cle) => {
+          memoire.filtre = cle
+          peindre()
+        },
+      }
+    )
+  )
 
-  const tris = el('div', 'admin-segments')
+  const tris = el('div', 'g-tri')
   tris.setAttribute('role', 'radiogroup')
   tris.setAttribute('aria-label', 'Trier par')
+  tris.appendChild(el('span', null, 'Trier :'))
   const boutonsTri = TRIS.map((t) => {
-    const b = el('button', 'admin-segment', t.texte)
+    const b = el('button', null, t.texte)
     b.type = 'button'
     b.setAttribute('role', 'radio')
     b.addEventListener('click', () => {
@@ -127,32 +108,24 @@ export async function viewMembers() {
   })
   wrap.appendChild(tris)
 
-  const resume = el('p', 'admin-resume')
-  wrap.appendChild(resume)
-  const liste = el('div', 'admin-liste')
+  const liste = el('div', 'g-pile')
   wrap.appendChild(liste)
   wrap.appendChild(
-    el(
-      'p',
-      'form__hint admin-note',
+    note(
       owner
-        ? 'Touchez un membre pour ouvrir sa fiche : son adresse, son activité, sa fiche, ses publications.'
+        ? 'Touchez un membre pour ouvrir sa fiche : son adresse, son activité, ses publications.'
         : 'Les fiches individuelles, qui portent les adresses e-mail, sont réservées au propriétaire du projet.'
     )
   )
 
-  recherche.addEventListener('input', () => {
-    memoire.recherche = recherche.value
+  champ.input.addEventListener('input', () => {
+    memoire.recherche = champ.input.value
     peindre()
   })
 
   const myId = getUser()?.id
 
   function peindre() {
-    for (const { b, cle } of boutonsFiltre) {
-      b.classList.toggle('is-active', cle === memoire.filtre)
-      b.setAttribute('aria-checked', String(cle === memoire.filtre))
-    }
     for (const { b, cle } of boutonsTri) {
       b.classList.toggle('is-active', cle === memoire.tri)
       b.setAttribute('aria-checked', String(cle === memoire.tri))
@@ -161,7 +134,7 @@ export async function viewMembers() {
     const q = normaliser(memoire.recherche)
     let membres = tous.filter((m) => {
       if (memoire.filtre === 'moderateurs') return m.role === 'admin' || m.is_owner
-      if (memoire.filtre !== 'tous') return (m.account_type || 'particulier') === memoire.filtre
+      if (memoire.filtre !== 'tous') return typeDe(m) === memoire.filtre
       return true
     })
     if (q) {
@@ -170,17 +143,15 @@ export async function viewMembers() {
       )
     }
 
-    // Le total reste celui des INSCRITS ; un filtre ou une recherche annonce en
-    // plus ce qu'il donne, sinon on croirait avoir perdu des membres.
-    resume.textContent =
-      membres.length === tous.length
-        ? `${tous.length} membre${tous.length > 1 ? 's' : ''}`
-        : `${membres.length} sur ${tous.length} membres`
-
     liste.innerHTML = ''
     if (!membres.length) {
-      liste.appendChild(emptyState(q ? 'Aucun membre ne porte ce nom.' : 'Aucun membre de ce type.'))
+      liste.appendChild(vide(q ? 'Aucun membre ne porte ce nom.' : 'Aucun membre de ce type.'))
       return
+    }
+    // Un filtre ou une recherche annonce ce qu'il donne, sinon on croirait
+    // avoir perdu des membres.
+    if (membres.length !== tous.length) {
+      liste.appendChild(note(`${membres.length} sur ${tous.length} membres`))
     }
 
     // Tri, et les REPÈRES qui vont avec : la lettre pour les tris alphabétiques,
@@ -214,8 +185,8 @@ export async function viewMembers() {
       const r = repere(m)
       if (r !== dernier) {
         dernier = r
-        liste.appendChild(el('h3', 'admin-repere', r))
-        groupe = el('div', 'admin-groupe')
+        liste.appendChild(el('h3', 'g-repere', r))
+        groupe = el('div', 'g-groupe')
         liste.appendChild(groupe)
       }
       groupe.appendChild(ligneMembre(m))
@@ -224,43 +195,58 @@ export async function viewMembers() {
 
   function ligneMembre(m) {
     const nom = m.display_name || 'Sans nom'
-    const type = m.account_type || 'particulier'
+    const type = typeDe(m)
     // Un modérateur consulte la liste ; seul le propriétaire ouvre la fiche.
     // Une ligne inerte plutôt qu'un lien vers une erreur — la base refuserait
     // de toute façon (member_profile).
-    const row = el(owner ? 'button' : 'div', 'admin-membre')
+    const row = el(owner ? 'button' : 'div', 'g-ligne')
     if (owner) {
       row.type = 'button'
       row.addEventListener('click', () => navigate('/membre?id=' + m.id))
     }
     row.appendChild(avatarMembre(nom, type))
 
-    const corps = el('div', 'admin-membre__corps')
-    corps.appendChild(el('span', 'admin-membre__nom', nom + (m.id === myId ? ' (vous)' : '')))
+    const corps = el('div', 'g-ligne__corps')
+    corps.appendChild(el('span', 'g-ligne__nom', nom + (m.id === myId ? ' (vous)' : '')))
     const details = [typeVisuel(type).libelle]
-    if (m.fiche_status) details.push(ETATS_FICHE[m.fiche_status] || '')
-    if (m.events_total) details.push(`${m.events_total} évén.`)
-    if (!m.fiche_status && !m.events_total) details.push('inscrit le ' + DTF.format(new Date(m.created_at)))
-    const detail = el('span', 'admin-membre__detail', details.filter(Boolean).join(' · '))
-    if (m.fiche_status === 'pending') detail.classList.add('admin-membre__detail--attente')
-    corps.appendChild(detail)
+    if (m.events_total) details.push(`${m.events_total} publication${m.events_total > 1 ? 's' : ''}`)
+    // La dernière visite n'arrive de la base que pour le propriétaire (0037).
+    if (m.last_seen) details.push('vu ' + depuis(m.last_seen))
+    corps.appendChild(el('span', 'g-ligne__detail', details.join(' · ')))
+    if (m.fiche_status) {
+      corps.appendChild(
+        el(
+          'span',
+          'g-ligne__detail' + (m.fiche_status === 'pending' ? ' g-ligne__detail--attente' : ''),
+          [m.fiche_name, ETATS_FICHE[m.fiche_status]].filter(Boolean).join(' — ')
+        )
+      )
+    }
     row.appendChild(corps)
 
-    const marques = el('span', 'admin-membre__marques')
+    const fin = el('span', 'g-ligne__fin')
+    const anciennete = joursDepuis(m.created_at)
+    if (anciennete != null && anciennete < JOURS_NOUVEAU) {
+      fin.appendChild(el('span', 'g-etiquette g-etiquette--nouveau', 'nouveau'))
+    }
     if (m.is_owner || m.role === 'admin') {
       const s = icon('shield')
       s.setAttribute('aria-label', m.is_owner ? 'Propriétaire' : 'Modérateur')
-      s.classList.add('admin-marque--moderateur')
-      marques.appendChild(s)
+      s.classList.add('g-marque--moderateur')
+      fin.appendChild(s)
     }
     if (m.is_supporter) {
       const h = icon('heart')
       h.setAttribute('aria-label', 'Soutien')
-      h.classList.add('admin-marque--soutien')
-      marques.appendChild(h)
+      h.classList.add('g-marque--soutien')
+      fin.appendChild(h)
     }
-    row.appendChild(marques)
-    if (owner) row.appendChild(icon('chevronRight'))
+    row.appendChild(fin)
+    if (owner) {
+      const chevron = icon('chevronRight')
+      chevron.classList.add('g-ligne__chevron')
+      row.appendChild(chevron)
+    }
     return row
   }
 

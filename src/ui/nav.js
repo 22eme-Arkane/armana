@@ -1,6 +1,7 @@
-// Armana — barre de navigation basse (4 onglets, icônes Lucide).
+// Armana — barre de navigation basse (4 onglets ; leurs icônes : navIcones.js).
 import { el } from './components.js'
 import { icon } from './icons.js'
+import { iconeOnglet } from './navIcones.js'
 import { navigate, currentRoute } from '../lib/router.js'
 import { isAdmin, isLoggedIn } from '../lib/auth.js'
 import { myPendingCount } from '../lib/moderation.js'
@@ -125,10 +126,11 @@ export function buildNav() {
     if (i === 2) inner.appendChild(boutonPublier(path))
     const b = el('button', 'navtab')
     b.type = 'button'
-    // Le pictogramme est enveloppé : c'est l'enveloppe qui porte le carré
-    // bleu de l'onglet actif, sans rogner l'icône (voir style.css).
+    // Le pictogramme est enveloppé : c'est l'enveloppe qui grossit quand
+    // l'onglet est actif, et elle garde à la pastille du modérateur un repère
+    // fixe (voir style.css).
     const pastille = el('span', 'navtab__icone')
-    pastille.appendChild(icon(t.ic))
+    pastille.appendChild(iconeOnglet(t.ic))
     b.appendChild(pastille)
     b.appendChild(el('span', 'navtab__label', t.label))
     if (active === t.path) {

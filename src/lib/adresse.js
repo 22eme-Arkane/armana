@@ -65,3 +65,31 @@ export function villeDeLAdresse(adresse) {
   if (segments.length > 1) return segments[segments.length - 1]
   return brut
 }
+
+/**
+ * La RUE d'un événement (« 12 Rue des Cordeliers »), quand son auteur a choisi
+ * une adresse précise (formulaire du 11/11/2026).
+ *
+ * Il n'y a pas de colonne dédiée : l'adresse est composée par le formulaire —
+ * « Théâtre La Rirette, 12 Rue des Cordeliers, 04300 Mane » — et la rue est ce
+ * qui reste une fois retirés le nom du lieu, en tête, et « code postal
+ * commune », en queue. Contrairement à la ville ci-dessus, rien n'est deviné :
+ * on ne lit que des adresses que l'application a écrites elle-même, d'où la
+ * condition sur `city` (absente des événements d'avant la migration 0035, dont
+ * l'adresse est en texte libre).
+ * @param {{address?:string, place_name?:string, city?:string}} ev
+ * @returns {string} '' s'il n'y a pas de rue
+ */
+export function rueDeLEvenement(ev) {
+  if (!ev?.city || !ev.address) return ''
+  let reste = String(ev.address).trim()
+  const lieu = String(ev.place_name || '').trim()
+  if (lieu && reste.startsWith(lieu)) reste = reste.slice(lieu.length)
+  const morceaux = reste
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const dernier = morceaux[morceaux.length - 1]
+  if (dernier && (/^\d{5}\b/.test(dernier) || dernier.toLowerCase() === String(ev.city).toLowerCase())) morceaux.pop()
+  return morceaux.join(', ')
+}

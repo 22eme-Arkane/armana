@@ -146,6 +146,9 @@
   border-radius: 14px;
   background: rgba(244, 202, 21, 0.35);
 }
+/* Sur l'encadré bleu du formulaire « Publier », le jaune translucide virait au
+   gris-vert, texte sombre dessus : un jaune plein, lisible. */
+.page--studio-publish .choix-lieu__choisie { background: #f4ca15; color: #062b1d; }
 .choix-lieu__choisie svg { width: 18px; height: 18px; color: var(--studio-green); flex: 0 0 auto; }
 .choix-lieu__choisie strong { flex: 1 1 auto; min-width: 0; }
 .choix-lieu__liste { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.35rem; }
@@ -164,6 +167,11 @@
   cursor: pointer;
 }
 .choix-lieu__option span { font-size: 0.8rem; opacity: 0.7; white-space: nowrap; }
+/* Une adresse est plus longue qu'un nom de commune : la rue sur une ligne,
+   « code postal ville » dessous — côte à côte, elles débordaient à 360 px. */
+.choix-lieu__option--adresse { flex-direction: column; align-items: flex-start; gap: 0.05rem; }
+.choix-lieu__option--adresse strong { overflow-wrap: anywhere; }
+.choix-lieu__option--adresse span { white-space: normal; }
 .choix-lieu__repere-label { display: block; margin-top: 0.6rem; }
 .choix-lieu__carte {
   height: 190px;

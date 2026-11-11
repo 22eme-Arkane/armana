@@ -11,6 +11,7 @@ import { fichesPubliees } from './fiches.js'
 import { foodSurPlace } from './foodTrucks.js'
 import { chargerCommunes, villeDeLEvenement } from './communes.js'
 import { regionsDe } from './departements.js'
+import { demoActif, demoGestion } from './demo.js'
 
 export const CATEGORIES = [
   'Musique',
@@ -110,15 +111,18 @@ async function attachRelations(events) {
       continue
     }
     if (!parEvenement.has(p.event_id)) parEvenement.set(p.event_id, [])
-    parEvenement.get(p.event_id).push(p.storage_path)
+    parEvenement.get(p.event_id).push({ chemin: p.storage_path, position: p.position })
   }
   const nameById = new Map((profilesRes.data ?? []).map((p) => [p.id, p.display_name]))
 
   return list.map((e) => {
-    const paths = parEvenement.get(e.id) ?? []
-    const photos = paths.map((p) => ({
-      photo_url: publicPhotoUrl(p),
-      thumb_url: publicPhotoUrl(thumbPath(p)),
+    // `position` : le jour que la photo illustre. Le formulaire de modification
+    // s'en sert pour montrer, emplacement par emplacement, ce qui est déjà en
+    // ligne (un jour sans affiche laisse un trou dans les positions).
+    const photos = (parEvenement.get(e.id) ?? []).map((p) => ({
+      photo_url: publicPhotoUrl(p.chemin),
+      thumb_url: publicPhotoUrl(thumbPath(p.chemin)),
+      position: p.position,
     }))
     return {
       ...e,
@@ -219,6 +223,7 @@ export async function listMyEvents() {
 
 /** Événements en attente de modération (admin uniquement, garanti par RLS). */
 export async function listPendingEvents() {
+  if (demoActif()) return (await demoGestion()).listPendingEvents()
   const { data, error } = await supabase
     .from('events_geo')
     .select('*')
@@ -351,6 +356,7 @@ export async function deleteEvent(id) {
 
 /** Modération : approuver / rejeter. */
 export async function setEventStatus(id, status) {
+  if (demoActif()) return (await demoGestion()).setEventStatus(id, status)
   // ⚠ Sans `.select()`, un UPDATE que la RLS filtre (modérateur hors de sa
   // zone) répond 204 avec ZÉRO ligne modifiée : on croirait avoir approuvé
   // alors que rien n'a bougé. On exige la ligne en retour.

@@ -25,13 +25,21 @@ function svgEl(tag, attrs = {}) {
  * @param {string[]} opts.selection  codes allumés au départ
  * @param {(code:string)=>void} [opts.onPick]  clic sur un département
  * @param {string[]} [opts.codes]  départements dessinés (défaut : toute la France)
+ * @param {(code:string)=>string} [opts.classe]  classe(s) en plus par
+ *        département — la carte de couverture des modérateurs s'en sert pour
+ *        colorer « couvert », « chargé », « en attente »
  */
-export function carteDepartements({ selection = [], onPick = null, codes = CODES_DEPARTEMENTS } = {}) {
+export function carteDepartements({
+  selection = [],
+  onPick = null,
+  codes = CODES_DEPARTEMENTS,
+  classe = null,
+} = {}) {
   const hote = el()
   let courant = [...selection]
 
   loadFranceAllegee()
-    .then((geojson) => dessiner(hote, geojson, () => courant, onPick, codes))
+    .then((geojson) => dessiner(hote, geojson, () => courant, onPick, codes, classe))
     .catch(() => {
       // Contours indisponibles (hors ligne au premier lancement) : la vignette
       // disparaît, le reste de l'écran continue de fonctionner. Une carte est
@@ -54,7 +62,7 @@ function el() {
   return d
 }
 
-function dessiner(hote, geojson, getSelection, onPick, codes) {
+function dessiner(hote, geojson, getSelection, onPick, codes, classe) {
   // Au-delà d'une région, les numéros se chevaucheraient : la carte seule.
   const avecNumeros = codes.length <= 14
   const traits = []
@@ -103,6 +111,8 @@ function dessiner(hote, geojson, getSelection, onPick, codes) {
     const p = svgEl('path', { d: t.d, class: 'carte-depts__dept' })
     p.dataset.code = t.code
     if (selection.includes(t.code)) p.classList.add('is-active')
+    const enPlus = classe?.(t.code)
+    if (enPlus) p.classList.add(...enPlus.split(' ').filter(Boolean))
     if (onPick) {
       p.classList.add('is-clickable')
       p.addEventListener('click', () => onPick(t.code))

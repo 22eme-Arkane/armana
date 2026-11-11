@@ -8,7 +8,7 @@ import { supabase } from './supabaseClient.js'
 import { getUser } from './auth.js'
 import { toWebp } from './image.js'
 import { ecrirePoint, lirePoint } from './point.js'
-import { demoFiche } from './demo.js'
+import { demoActif, demoFiche, demoGestion } from './demo.js'
 
 const BUCKET = 'event-photos'
 // Calculée ici plutôt qu'importée d'events.js : events.js importe ce module
@@ -221,6 +221,7 @@ export async function retirerPhotoProduit(fiche) {
 
 /** Fiches en attente (modérateurs). */
 export async function listFichesEnAttente() {
+  if (demoActif()) return (await demoGestion()).listFichesEnAttente()
   const { data, error } = await supabase
     .from('fiches')
     // Le nom de la personne qui a créé la fiche, pour le modérateur (Matthieu,
@@ -235,6 +236,7 @@ export async function listFichesEnAttente() {
 
 /** Valide ou refuse une fiche. La base vérifie la zone du modérateur. */
 export async function decideFiche(id, status) {
+  if (demoActif()) return (await demoGestion()).decideFiche(id, status)
   const { data, error } = await supabase.from('fiches').update({ status }).eq('id', id).select('id')
   if (error) throw error
   if (!data?.length) throw new Error('cette fiche est hors de votre zone de modération.')

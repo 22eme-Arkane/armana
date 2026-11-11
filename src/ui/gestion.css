@@ -1,0 +1,629 @@
+/* Armana — les écrans de GESTION : Modération, Membres, fiche membre,
+   Modérateurs, Journal (refonte du 11/11/2026).
+
+   Matthieu : « pas du tout au goût du jour, c'est le bazar ». Ils reprennent
+   donc le langage des écrans récents — fond bleu (Faire un don, Mon
+   territoire), blocs blancs à bandeau de couleur et pictogramme (le panneau de
+   filtres), chiffres en jaune, onglets en barre translucide (l'Agenda).
+
+   ⚠ TOUT EST PRÉFIXÉ `.page--gestion` : ces règles doivent battre celles de
+   `.page--studio-sub` dans style.css (le piège de spécificité du projet), et ne
+   toucher aucun écran public. Ce qui vit dans une feuille (hors de la page)
+   est préfixé `.g-feuille`. */
+
+.page--gestion { gap: 0.85rem; padding-bottom: 7rem; margin-bottom: -6rem; }
+.page--gestion .g-pile { display: flex; flex-direction: column; gap: 0.85rem; }
+.page--gestion [hidden] { display: none !important; }
+
+/* --- Chiffres en tête ------------------------------------------------------- */
+.page--gestion .g-chiffres { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
+.page--gestion .g-chiffres--3 { grid-template-columns: repeat(3, 1fr); }
+.page--gestion .g-chiffre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  padding: 0.6rem 0.2rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  text-align: center;
+}
+.page--gestion .g-chiffre strong {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  line-height: 1.05;
+  color: var(--mask-yellow);
+}
+.page--gestion .g-chiffre span { font-size: 0.7rem; font-weight: 600; line-height: 1.2; }
+/* Un chiffre qui demande qu'on s'en occupe : tuile pleine, jaune. */
+.page--gestion .g-chiffre--alerte { background: var(--mask-yellow); color: var(--studio-ink); }
+.page--gestion .g-chiffre--alerte strong { color: var(--studio-ink); }
+
+/* --- Onglets : une barre translucide, l'onglet actif en blanc ------------------ */
+.page--gestion .g-onglets {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.page--gestion .g-onglet {
+  /* `auto`, pas `0` : chaque onglet prend la largeur de son libellé, puis le
+     reste se partage. À parts égales, « Événements 4 » débordait de sa pilule
+     sur un écran de 360 px. */
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0.35rem 0.5rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.page--gestion .g-onglet.is-active { background: #fff; color: var(--studio-ink); }
+.page--gestion .g-onglet__n {
+  min-width: 1.3rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--mask-yellow);
+  color: var(--studio-ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.3rem;
+}
+.page--gestion .g-onglet__n--alerte { background: var(--studio-red); color: #fff; }
+
+/* --- Titre de section, en Lobster jaune (comme « Faire un don ») ----------------- */
+.page--gestion .g-titre {
+  margin: 0.5rem 0 -0.15rem;
+  color: var(--mask-yellow);
+  font-family: 'Lobster', var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 400;
+  line-height: 1.15;
+  text-align: center;
+}
+.page--gestion .g-note {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  text-align: center;
+}
+.page--gestion .g-zone-pastille {
+  align-self: center;
+  margin: 0;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* --- Bloc : carte blanche à bandeau de couleur ----------------------------------- */
+.page--gestion .g-bloc {
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  color: var(--studio-ink);
+  box-shadow: 0 6px 16px rgba(4, 30, 80, 0.25);
+}
+.page--gestion .g-bloc__bandeau {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.55rem 0.9rem;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.page--gestion .g-bloc__bandeau svg { width: 19px; height: 19px; flex: 0 0 auto; }
+.page--gestion .g-bloc__bandeau span:first-of-type { flex: 1 1 auto; min-width: 0; }
+.page--gestion .g-bloc__compte {
+  flex: 0 0 auto;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0;
+  line-height: 1.4rem;
+}
+.page--gestion .g-bloc--bleu .g-bloc__bandeau { background: #1d6be0; }
+.page--gestion .g-bloc--rouge .g-bloc__bandeau { background: var(--studio-red); }
+.page--gestion .g-bloc--vert .g-bloc__bandeau { background: var(--studio-green); }
+.page--gestion .g-bloc--violet .g-bloc__bandeau { background: #6b3f8f; }
+.page--gestion .g-bloc--jaune .g-bloc__bandeau { background: var(--mask-yellow); color: var(--studio-ink); }
+.page--gestion .g-bloc--jaune .g-bloc__compte { background: rgba(6, 43, 29, 0.14); }
+.page--gestion .g-bloc__corps { display: flex; flex-direction: column; gap: 0.55rem; padding: 0.8rem 0.85rem; }
+.page--gestion .g-bloc__corps--liste { gap: 0; padding: 0; }
+.page--gestion .g-texte { margin: 0; font-size: 0.82rem; line-height: 1.45; color: color-mix(in srgb, var(--studio-ink) 72%, #fff); }
+.page--gestion .g-fort { margin: 0; font-family: var(--font-display); font-size: 1.2rem; color: var(--studio-ink); }
+.page--gestion .g-boutons { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.page--gestion .g-boutons .btn { flex: 1 1 auto; text-decoration: none; }
+.page--gestion .g-bloc a.btn { text-decoration: none; }
+
+/* Carte blanche simple, sans bandeau. */
+.page--gestion .g-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border-radius: 18px;
+  background: #fff;
+  color: var(--studio-ink);
+  box-shadow: 0 6px 16px rgba(4, 30, 80, 0.25);
+}
+
+/* État vide : discret, sur le bleu. */
+.page--gestion .g-vide {
+  margin: 0;
+  padding: 1.4rem 1rem;
+  border: 2px dashed rgba(255, 255, 255, 0.45);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+}
+.page--gestion .g-bloc .g-vide,
+.page--gestion .g-carte .g-vide {
+  padding: 0.6rem 0.4rem;
+  border: none;
+  background: none;
+  color: color-mix(in srgb, var(--studio-ink) 65%, #fff);
+  font-weight: 500;
+  font-size: 0.84rem;
+}
+
+/* --- Recherche et pastilles de filtre ----------------------------------------------- */
+.page--gestion .g-recherche {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  background: #fff;
+}
+.page--gestion .g-recherche svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--studio-blue); }
+.page--gestion .g-recherche input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--studio-ink);
+  font: inherit;
+  outline: none;
+}
+.page--gestion .g-pastilles { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem; }
+/* Une seule ligne qui défile, quand les pastilles sont nombreuses. */
+.page--gestion .g-pastilles--file {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  /* Jusqu'aux bords de la page (0,7rem : voir `.page--studio-blue.page--studio-sub`). */
+  margin: 0 -0.7rem;
+  padding: 0 0.7rem 0.1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.page--gestion .g-pastilles--file::-webkit-scrollbar { display: none; }
+.page--gestion .g-pastille {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 34px;
+  padding: 0.3rem 0.75rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.page--gestion .g-pastille__n { font-size: 0.72rem; font-weight: 600; opacity: 0.85; }
+.page--gestion .g-pastille.is-active {
+  border-color: var(--mask-yellow);
+  background: var(--mask-yellow);
+  color: var(--studio-ink);
+}
+.page--gestion .g-tri {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.page--gestion .g-tri button {
+  padding: 0.15rem 0.1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: rgba(255, 255, 255, 0.8);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.page--gestion .g-tri button.is-active { color: var(--mask-yellow); border-bottom-color: var(--mask-yellow); }
+
+/* --- Listes de personnes -------------------------------------------------------------- */
+.page--gestion .g-repere {
+  margin: 0.35rem 0.3rem -0.45rem;
+  color: var(--mask-yellow);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.page--gestion .g-groupe {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(4, 30, 80, 0.25);
+}
+.page--gestion .g-ligne {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 58px;
+  padding: 0.55rem 0.8rem;
+  border: none;
+  border-top: 1px solid rgba(6, 43, 29, 0.08);
+  background: transparent;
+  color: var(--studio-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+.page--gestion .g-ligne:first-child { border-top: none; }
+.page--gestion button.g-ligne,
+.page--gestion a.g-ligne { cursor: pointer; }
+.page--gestion .g-ligne__corps { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.05rem; }
+.page--gestion .g-ligne__nom { font-size: 0.92rem; font-weight: 800; overflow-wrap: anywhere; }
+.page--gestion .g-ligne__detail { font-size: 0.76rem; line-height: 1.35; color: color-mix(in srgb, var(--studio-ink) 62%, #fff); }
+.page--gestion .g-ligne__detail--alerte { color: #a3271a; font-weight: 700; }
+.page--gestion .g-ligne__detail--attente { color: #8a5f00; font-weight: 700; }
+.page--gestion .g-ligne__fin { flex: 0 0 auto; display: flex; align-items: center; gap: 0.3rem; }
+.page--gestion .g-ligne__fin > svg { width: 18px; height: 18px; }
+.page--gestion .g-ligne > svg:last-child,
+.page--gestion .g-ligne__chevron { width: 18px; height: 18px; flex: 0 0 auto; opacity: 0.4; }
+.page--gestion .g-marque--moderateur { color: var(--studio-blue); }
+.page--gestion .g-marque--soutien { color: var(--studio-red); fill: currentColor; }
+
+/* Étiquettes (statuts, rôles). */
+.page--gestion .g-etiquette,
+.g-feuille .g-etiquette {
+  display: inline-block;
+  padding: 0.14rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(6, 43, 29, 0.08);
+  color: var(--studio-ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.page--gestion .g-etiquette--role { background: rgba(11, 85, 197, 0.12); color: var(--studio-blue); }
+.page--gestion .g-etiquette--attente { background: rgba(244, 202, 21, 0.45); color: #5e4200; }
+.page--gestion .g-etiquette--ok { background: rgba(38, 120, 76, 0.14); color: var(--studio-green); }
+.page--gestion .g-etiquette--refus { background: rgba(240, 75, 47, 0.14); color: #a3271a; }
+.page--gestion .g-etiquette--nouveau { background: var(--mask-yellow); color: var(--studio-ink); }
+
+/* --- Modération : fiches et suivi des food trucks ------------------------------------- */
+.page--gestion .g-fiche { display: flex; gap: 0.7rem; }
+.page--gestion .g-fiche__photo { width: 76px; height: 76px; flex: 0 0 auto; border-radius: 12px; object-fit: cover; }
+.page--gestion .g-fiche__corps { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.page--gestion .g-fiche__type { font-size: 0.66rem; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; }
+.page--gestion .g-fiche__nom { font-family: var(--font-display); font-size: 1.15rem; line-height: 1.15; color: var(--studio-ink); }
+.page--gestion .g-fiche__auteur { font-size: 0.78rem; font-weight: 700; color: var(--studio-blue); }
+.page--gestion .g-truck { border-left: 5px solid var(--studio-green); }
+.page--gestion .g-truck--rappel,
+.page--gestion .g-truck--signale { border-left-color: var(--mask-yellow); }
+.page--gestion .g-truck--masque,
+.page--gestion .g-truck--archive { border-left-color: var(--studio-red); }
+.page--gestion .g-repli > summary {
+  padding: 0.75rem 0.9rem;
+  color: var(--studio-blue);
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Les événements à valider gardent leur carte-affiche ; seul le cadre change. */
+.page--gestion .events-list { display: flex; flex-direction: column; gap: 0.85rem; }
+.page--gestion .studio-event-item { border: none; box-shadow: 0 6px 16px rgba(4, 30, 80, 0.25); }
+.page--gestion .g-evenement-meta {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.9rem;
+  font-size: 0.8rem;
+  color: var(--studio-ink);
+}
+.page--gestion .g-evenement-meta span { display: inline-flex; align-items: center; gap: 0.3rem; min-width: 0; }
+.page--gestion .g-evenement-meta svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--studio-blue); }
+.page--gestion .g-evenement-meta__ou { color: color-mix(in srgb, var(--studio-ink) 70%, #fff); }
+.page--gestion .g-evenement-meta__ou--hors { color: #a3271a; font-weight: 700; }
+
+/* --- Fiche membre ------------------------------------------------------------------------ */
+.page--gestion .g-identite { display: flex; flex-direction: column; align-items: center; gap: 0.45rem; padding: 0.4rem 0 0.1rem; text-align: center; }
+.page--gestion .g-identite .avatar-membre { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.9); }
+.page--gestion .g-identite__nom {
+  margin: 0.15rem 0 0;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+.page--gestion .g-identite__badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.3rem; }
+.page--gestion .g-identite .g-etiquette { background: #fff; }
+.page--gestion .g-identite .g-etiquette--role { color: var(--studio-blue); }
+.page--gestion .g-identite .g-etiquette--attente { background: var(--mask-yellow); }
+.page--gestion .g-contact { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; }
+.page--gestion .g-contact__mail { display: flex; align-items: center; gap: 0.4rem; min-width: 0; max-width: 100%; font-weight: 700; overflow-wrap: anywhere; }
+.page--gestion .g-contact__mail svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--studio-blue); }
+.page--gestion .g-contact .btn { text-decoration: none; }
+.page--gestion .g-tuiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
+.page--gestion .g-tuile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.7rem 0.4rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  text-align: center;
+}
+.page--gestion .g-tuile__libelle { font-size: 0.7rem; font-weight: 600; opacity: 0.9; }
+.page--gestion .g-tuile__valeur { font-family: var(--font-display); font-size: 1.15rem; color: var(--mask-yellow); }
+.page--gestion .g-tuile__detail { font-size: 0.68rem; line-height: 1.3; opacity: 0.9; }
+.page--gestion .g-danger { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; margin-top: 0.3rem; }
+.page--gestion .g-danger__ouvrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border: none;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.page--gestion .g-danger__ouvrir svg { width: 16px; height: 16px; }
+.page--gestion .g-danger__panneau {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.9rem;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px var(--studio-red);
+}
+.page--gestion .g-danger__texte { margin: 0; font-size: 0.82rem; line-height: 1.45; text-align: center; color: #7a1d12; }
+
+/* --- Modérateurs : candidatures et couverture ------------------------------------------------ */
+.page--gestion .g-candidat { display: flex; flex-direction: column; gap: 0.5rem; }
+.page--gestion .g-candidat__tete { display: flex; align-items: center; gap: 0.6rem; }
+.page--gestion .g-candidat__demande {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(11, 85, 197, 0.08);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+.page--gestion .g-candidat__demande strong { color: var(--studio-blue); }
+.page--gestion .g-candidat__message { margin: 0; padding-left: 0.7rem; border-left: 3px solid var(--mask-yellow); font-size: 0.84rem; font-style: italic; line-height: 1.45; overflow-wrap: anywhere; }
+.page--gestion .g-lien {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--studio-ink);
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(6, 43, 29, 0.3);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.page--gestion .g-legende { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.3rem 0.9rem; margin: 0; padding: 0; list-style: none; font-size: 0.74rem; color: #fff; }
+.page--gestion .g-legende li { display: inline-flex; align-items: center; gap: 0.35rem; }
+.page--gestion .g-legende i { width: 12px; height: 12px; border-radius: 4px; }
+.page--gestion .g-info-dept {
+  min-height: 2.6rem;
+  margin: 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  text-align: center;
+}
+.page--gestion .g-info-dept strong { color: var(--mask-yellow); }
+
+/* La carte de France — posée sur le bleu de la page (ou d'un encart bleu dans
+   une feuille). Trois états pour la couverture : couvert, chargé, sans personne. */
+.page--gestion .g-france .carte-depts__svg,
+.g-feuille .g-france .carte-depts__svg { max-height: 300px; margin: 0 auto; }
+.page--gestion .g-france .carte-depts__dept,
+.g-feuille .g-france .carte-depts__dept {
+  fill: rgba(255, 255, 255, 0.16);
+  stroke: rgba(11, 85, 197, 0.9);
+  stroke-width: 0.025;
+  transition: fill 0.15s ease;
+}
+.page--gestion .g-france .carte-depts__dept.is-active,
+.g-feuille .g-france .carte-depts__dept.is-active { fill: var(--mask-yellow, #f4ca15); }
+.page--gestion .g-france .carte-depts__dept.est-couvert { fill: #63d28a; }
+.page--gestion .g-france .carte-depts__dept.est-charge { fill: var(--mask-yellow); }
+.page--gestion .g-france .carte-depts__dept.est-en-attente { fill: #ff8a73; }
+.page--gestion .g-france .carte-depts__dept.est-choisi { stroke: #fff; stroke-width: 0.07; }
+
+/* --- Journal ----------------------------------------------------------------------------------- */
+.page--gestion .g-acte {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: none;
+  border-top: 1px solid rgba(6, 43, 29, 0.08);
+  background: transparent;
+  color: var(--studio-ink);
+  font: inherit;
+  text-align: left;
+}
+.page--gestion .g-acte:first-child { border-top: none; }
+.page--gestion button.g-acte { cursor: pointer; }
+.page--gestion .g-acte__picto {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(38, 120, 76, 0.14);
+  color: var(--studio-green);
+}
+.page--gestion .g-acte__picto svg { width: 16px; height: 16px; }
+.page--gestion .g-acte--refus .g-acte__picto,
+.page--gestion .g-acte--sensible .g-acte__picto { background: rgba(240, 75, 47, 0.14); color: #c2311c; }
+.page--gestion .g-acte--equipe .g-acte__picto { background: rgba(11, 85, 197, 0.12); color: var(--studio-blue); }
+.page--gestion .g-acte--soutien .g-acte__picto { background: rgba(244, 202, 21, 0.4); color: #7a5600; }
+.page--gestion .g-acte--neutre .g-acte__picto { background: rgba(6, 43, 29, 0.08); color: var(--studio-ink); }
+.page--gestion .g-acte__corps { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.page--gestion .g-acte__texte { margin: 0; font-size: 0.86rem; line-height: 1.4; overflow-wrap: anywhere; }
+.page--gestion .g-acte__texte strong { font-weight: 800; }
+.page--gestion .g-acte__detail { font-size: 0.74rem; color: color-mix(in srgb, var(--studio-ink) 62%, #fff); }
+.page--gestion .g-acte__heure { flex: 0 0 auto; padding-top: 0.15rem; font-size: 0.72rem; font-weight: 600; color: color-mix(in srgb, var(--studio-ink) 55%, #fff); }
+.page--gestion .g-acte--sensible { background: rgba(240, 75, 47, 0.05); }
+.page--gestion .g-plus {
+  align-self: center;
+  padding: 0.6rem 1.2rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.page--gestion .g-plus:disabled { opacity: 0.6; }
+.page--gestion .g-select {
+  min-height: 34px;
+  padding: 0.25rem 0.7rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.page--gestion .g-select option { color: var(--studio-ink); }
+.page--gestion .g-filtres-journal { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+
+/* --- Feuilles (zone d'un modérateur, nomination) ----------------------------------------------- */
+.g-feuille .feuille__corps { display: flex; flex-direction: column; gap: 0.65rem; padding-top: 0.6rem; background: var(--studio-cream, #fff4df); }
+.g-feuille .g-france { padding: 0.5rem; border-radius: 14px; background: var(--studio-blue, #0b55c5); }
+.g-feuille .g-france .carte-depts { margin: 0; }
+.g-feuille__aide { margin: 0; font-size: 0.8rem; line-height: 1.4; color: color-mix(in srgb, var(--studio-ink, #062b1d) 70%, #fff); }
+.g-feuille__resume {
+  margin: 0;
+  color: var(--studio-blue, #0b55c5);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.g-feuille__msg { min-height: 1.1em; margin: 0; font-size: 0.84rem; font-weight: 600; color: #a3271a; }
+.g-feuille__retirer {
+  align-self: center;
+  padding: 0.3rem;
+  border: none;
+  background: none;
+  color: #a3271a;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.g-feuille .filtre-affiner { margin: 0; }
+.g-feuille .g-recherche {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.9rem;
+  border: 1.5px solid rgba(11, 85, 197, 0.3);
+  border-radius: 999px;
+  background: #fff;
+}
+.g-feuille .g-recherche svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--studio-blue, #0b55c5); }
+.g-feuille .g-recherche input { flex: 1 1 auto; min-width: 0; min-height: 44px; border: none; background: transparent; font: inherit; outline: none; }
+.g-feuille .g-resultats { display: flex; flex-direction: column; gap: 0.3rem; }
+.g-feuille .g-resultat {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid rgba(6, 43, 29, 0.12);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--studio-ink, #062b1d);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.g-feuille .g-resultat strong { display: block; font-size: 0.9rem; }
+.g-feuille .g-resultat span span { font-size: 0.75rem; opacity: 0.7; }
+.g-feuille .g-choisi {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 14px;
+  background: rgba(244, 202, 21, 0.35);
+}
+.g-feuille .g-choisi strong { flex: 1 1 auto; min-width: 0; }
+.g-feuille details.g-depannage > summary { font-size: 0.8rem; font-weight: 700; color: var(--studio-green, #26784c); cursor: pointer; }
+.g-feuille details.g-depannage[open] { display: flex; flex-direction: column; gap: 0.5rem; }

@@ -21,7 +21,7 @@ import { navigate } from '../lib/router.js'
 import { isLoggedIn } from '../lib/auth.js'
 import { addGem, removeGem } from '../lib/events.js'
 import { shareEvent } from '../lib/share.js'
-import { villeDeLAdresse } from '../lib/adresse.js'
+import { rueDeLEvenement, villeDeLAdresse } from '../lib/adresse.js'
 import { lireContact } from '../lib/contact.js'
 import { dayKey, describeRecurrence, isRecurring, nextOccurrence } from '../lib/recurrence.js'
 import './ficheEvenement.css'
@@ -238,7 +238,8 @@ function infosPratiques(ev, q, reste) {
   // fait déjà ce travail (retiré à la demande de Matthieu).
   // Lieu et commune, séparés depuis la migration 0035 : « Théâtre La Rirette,
   // Mane ». Les anciens événements gardent leur adresse telle quelle.
-  const ou = ev.city ? [ev.place_name, ev.city].filter(Boolean).join(', ') : ev.address
+  // La rue, quand l'auteur a choisi une adresse précise (11/11/2026).
+  const ou = ev.city ? [ev.place_name, rueDeLEvenement(ev), ev.city].filter(Boolean).join(', ') : ev.address
   if (ou) liste.appendChild(info('pin', 'Où', ou))
   liste.appendChild(info('euro', 'Tarif', prix(ev)))
   // Ce qui reste du champ contact une fois les liens et numéros devenus des

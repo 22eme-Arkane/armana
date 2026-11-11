@@ -6,9 +6,11 @@
 // dans l'interface ce sont des MODÉRATEURS — le seul administrateur est le
 // propriétaire.
 import { supabase } from './supabaseClient.js'
+import { demoActif, demoGestion } from './demo.js'
 
 /** Ma zone de modération : liste de codes, ou null = tous (propriétaire). */
 export async function myModDepts() {
+  if (demoActif()) return null
   const { data, error } = await supabase.rpc('my_mod_depts')
   if (error) throw error
   return data ?? null
@@ -20,6 +22,7 @@ export async function myModDepts() {
  * à un modérateur cloisonné à son département.
  */
 export async function myPendingCount() {
+  if (demoActif()) return (await demoGestion()).myPendingCount()
   const { data, error } = await supabase.rpc('my_pending_count')
   if (error) throw error
   return data ?? 0
@@ -30,6 +33,7 @@ export async function myPendingCount() {
  * `depts` vide ou null = retirer le rôle. Propriétaire uniquement.
  */
 export async function setModerator(id, depts) {
+  if (demoActif()) return (await demoGestion()).setModerator(id, depts)
   const { data, error } = await supabase.rpc('set_moderator', {
     p_target: id,
     p_depts: depts?.length ? depts : null,
@@ -67,6 +71,7 @@ export async function myModeratorRequest() {
 
 /** Toutes les candidatures (propriétaire) : en attente d'abord. */
 export async function listModeratorRequests() {
+  if (demoActif()) return (await demoGestion()).listModeratorRequests()
   const { data, error } = await supabase.rpc('list_moderator_requests')
   if (error) throw error
   return data ?? []
@@ -74,6 +79,7 @@ export async function listModeratorRequests() {
 
 /** Accepter ou refuser une candidature (propriétaire). */
 export async function decideModeratorRequest(id, accept) {
+  if (demoActif()) return (await demoGestion()).decideModeratorRequest(id, accept)
   const { error } = await supabase.rpc('decide_moderator_request', {
     p_id: id,
     p_accept: accept,
