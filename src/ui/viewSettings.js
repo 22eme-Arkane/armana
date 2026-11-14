@@ -12,6 +12,38 @@ import { demoActif } from '../lib/demo.js'
 import { currentBuild } from '../lib/update.js'
 import { studioHeader, boutonPartage } from './studio.js'
 import { titreMaFiche } from './typeCompte.js'
+import { getMaFiche } from '../lib/fiches.js'
+
+/**
+ * L'appel aux ASSOCIATIONS dont la fiche manque ou reste vide (14/11/2026).
+ * L'annuaire ne liste que des fiches : un compte « association » sans fiche
+ * n'y figure pas. La migration 0042 en a créé une, minimale (nom et commune),
+ * pour les comptes existants ; c'est ici qu'on les invite à la compléter.
+ * Rend null quand il n'y a rien à demander.
+ */
+async function appelFicheAssociation() {
+  const f = await getMaFiche()
+  let titre
+  let texte
+  if (!f) {
+    titre = 'Votre association n’est pas dans l’annuaire'
+    texte = 'Créez sa fiche : elle y paraîtra une fois relue.'
+  } else if (!f.photo_path || !f.description || !f.domaine) {
+    titre = 'Complétez la fiche de votre association'
+    texte = 'Photo, présentation, domaine : c’est ce qu’on voit dans l’annuaire.'
+  } else {
+    return null
+  }
+  const b = el('button', 'fiche-appel')
+  b.type = 'button'
+  const picto = el('span', 'fiche-appel__picto')
+  picto.appendChild(icon('users'))
+  const textes = el('span', 'fiche-appel__texte')
+  textes.append(el('strong', null, titre), el('span', null, texte))
+  b.append(picto, textes, icon('chevronRight'))
+  b.addEventListener('click', () => navigate('/ma-fiche'))
+  return b
+}
 
 export async function viewSettings() {
   // Armana ne sert à rien sans utilisateurs : le bouton de partage est logé
@@ -48,6 +80,15 @@ export async function viewSettings() {
   // d'où un groupe visible même déconnecté (mais sans les lignes de publication,
   // qui n'auraient nulle part où mener).
   wrap.appendChild(ruban('Créer & gérer', 'jaune'))
+  // Une association sans fiche complète : l'appel se glisse ici, sans retarder
+  // l'affichage du reste de la page (la fiche se lit à part).
+  if (logged && getProfile()?.account_type === 'association') {
+    const emplacement = el('div')
+    wrap.appendChild(emplacement)
+    appelFicheAssociation()
+      .then((carte) => (carte ? emplacement.replaceWith(carte) : emplacement.remove()))
+      .catch(() => emplacement.remove())
+  }
   const pub = el('div', 'settings-group settings-group--jaune')
   // « Publier un événement » reste visible même déconnecté : c'est la raison
   // d'être de l'application, la cacher revenait à ne jamais la proposer à

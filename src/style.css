@@ -1127,6 +1127,41 @@ a.settings-row .settings-row__label { word-break: break-all; }
 }
 .don-banner__fleche svg { width: 17px; height: 17px; }
 
+/* L'appel aux associations dont la fiche manque ou reste vide (viewSettings.js).
+   Le langage de l'appel de l'annuaire : carte claire, pictogramme dans un rond
+   bleu, chevron — on reconnaît d'un écran à l'autre ce qui mène à la fiche. */
+.fiche-appel {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  margin: 0 0 0.6rem;
+  padding: 0.65rem 0.75rem 0.65rem 0.65rem;
+  border: 2px solid #f4ca15;
+  border-radius: 18px;
+  background: #fff4df;
+  color: #062b1d;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fiche-appel:active { transform: scale(0.98); }
+.fiche-appel__picto {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #0b55c5;
+  color: #f4ca15;
+}
+.fiche-appel__picto svg { width: 21px; height: 21px; }
+.fiche-appel__texte { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.fiche-appel__texte strong { font-size: 0.9rem; line-height: 1.2; }
+.fiche-appel__texte span { font-size: 0.78rem; line-height: 1.3; }
+.fiche-appel > svg { flex: 0 0 auto; width: 20px; height: 20px; color: #0b55c5; }
+
 /* --- Statistiques : fond bleu ------------------------------------------- */
 /* ⚠ CONTRASTE FRANC EXIGÉ, demandé par Matthieu : sur ce fond bleu, le vert
    de la charte tombe à 2,1:1 et devient illisible. Rien de vert ne subsiste
