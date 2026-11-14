@@ -40,16 +40,76 @@ export const UNIVERS = [
   },
   // ⚠ DES NOMS COURTS : la catégorie s'écrit en capitales dans la colonne
   // étroite des cartes de l'Agenda, et au-delà d'une douzaine de lettres elle
-  // est coupée (« VIE ASSOCI… », premier essai du 14/11/2026).
+  // est coupée (« VIE ASSOCI… », premier essai du 14/11/2026). Un nom plus long
+  // a sa forme courte dans LIBELLES_COURTS, plus bas.
+  // ⚠ UN NOM N'APPARTIENT QU'À UN UNIVERS : c'est lui qui le désigne. D'où
+  // « Cours de danse » (Ateliers) à côté de « Danse » (Culture, le spectacle).
+  //
+  // Listes élargies le 14/11/2026 à la demande de Matthieu (« il y a peu de
+  // choses… rajoute un maximum de choix »), rangées par ordre alphabétique :
+  // le menu de Publier et le panneau Filtres les lisent dans cet ordre.
   {
     cle: 'ateliers',
     nom: 'Ateliers',
-    categories: ['Atelier', 'Yoga', 'Méditation', 'Bien-être', 'Stage'],
+    categories: [
+      'Atelier', // le cas général, en tête ; le reste par ordre alphabétique
+      'Artisanat',
+      'Atelier enfants',
+      'Bien-être',
+      'Bricolage',
+      'Chant',
+      'Club de lecture',
+      'Couture',
+      'Cours de danse',
+      'Cours de musique',
+      'Cours de théâtre',
+      'Cuisine',
+      'Dessin',
+      'Écriture',
+      'Jardinage',
+      'Langues',
+      'Méditation',
+      'Numérique',
+      'Peinture',
+      'Photo',
+      'Poterie',
+      'Qi gong',
+      'Sciences',
+      'Sculpture',
+      'Sophrologie',
+      'Stage',
+      'Yoga',
+    ],
   },
   {
     cle: 'vie-locale',
     nom: 'Vie locale',
-    categories: ['Marché', 'Vide-grenier', 'Sport', 'Fête & loto', 'Nature', 'Solidarité'],
+    categories: [
+      'Bal populaire',
+      'Bourse & troc',
+      'Brocante',
+      'Carnaval',
+      'Commémoration',
+      'Course à pied',
+      'Environnement',
+      'Fête & loto',
+      'Fête votive',
+      'Foire & salon',
+      'Forum',
+      'Jeux',
+      'Kermesse',
+      'Marché',
+      'Nature',
+      'Pétanque',
+      'Portes ouvertes',
+      'Randonnée',
+      'Repas partagé',
+      'Réunion publique',
+      'Solidarité',
+      'Sortie famille',
+      'Sport',
+      'Vide-grenier',
+    ],
   },
 ]
 
@@ -72,8 +132,30 @@ export function nomUnivers(cle) {
 
 // Sur les CARTES de l'Agenda, la colonne du style ne fait que ~85 px à 360 px :
 // « Spectacles vivants » y finissait en « SPECTACLES… ». La carte dit le mot
-// court ; le panneau de filtres et la fiche gardent le nom entier.
-const LIBELLES_COURTS = { 'Spectacles vivants': 'Spectacles' }
+// court ; le menu de Publier, le panneau de filtres et la fiche gardent le nom
+// entier. (« Danse » sur une carte d'Ateliers ne se confond pas avec le
+// spectacle : on ne voit qu'un univers à la fois.)
+const LIBELLES_COURTS = {
+  'Spectacles vivants': 'Spectacles',
+  'Atelier enfants': 'Enfants',
+  'Club de lecture': 'Lecture',
+  'Cours de danse': 'Danse',
+  'Cours de musique': 'Musique',
+  'Cours de théâtre': 'Théâtre',
+  'Bal populaire': 'Bal',
+  'Repas partagé': 'Repas',
+  'Réunion publique': 'Réunion',
+  'Sortie famille': 'Famille',
+  // Mesurés le 14/11/2026 : même rapetissés, ces trois-là ne tenaient pas à
+  // 360 px…
+  Commémoration: 'Cérémonie',
+  Environnement: 'Écologie',
+  'Portes ouvertes': 'Visite',
+  // … et ceux-ci pas à 320 px.
+  'Bourse & troc': 'Troc',
+  'Course à pied': 'Course',
+  'Foire & salon': 'Foire',
+}
 
 export function libelleCourt(categorie) {
   return LIBELLES_COURTS[categorie] ?? categorie

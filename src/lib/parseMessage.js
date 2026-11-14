@@ -16,7 +16,37 @@ const CITIES_04 = [
 ]
 
 // Mots-clés → catégorie (première correspondance).
+// ⚠ L'ORDRE COMPTE. Les tournures précises des Ateliers et de la Vie locale
+// (14/11/2026) passent AVANT les règles générales : « stage de chant » est un
+// atelier, pas un concert ; « vide-grenier » n'est plus rangé en Marché.
 const CAT_RULES = [
+  ['Cours de danse', /\b(cours|atelier|stage|initiation) de danse\b/i],
+  ['Cours de musique', /\b(cours|atelier|stage) de (musique|guitare|piano|percussions?|violon|batterie)\b/i],
+  ['Cours de théâtre', /\b(cours|atelier|stage) (de |d')?(th[eé][aâ]tre|impro)/i],
+  ['Chant', /\b(cours|atelier|stage) de chant\b/i],
+  ['Peinture', /\b(atelier|stage|cours) (de )?peinture\b|\baquarelle\b/i],
+  ['Dessin', /\b(atelier|stage|cours) (de )?dessin\b/i],
+  ['Écriture', /\batelier d['’][eé]criture\b/i],
+  ['Poterie', /\b(poterie|c[eé]ramique|modelage)\b/i],
+  ['Couture', /\b(couture|tricot|broderie)\b/i],
+  ['Cuisine', /\b(atelier|cours) (de )?cuisine\b/i],
+  ['Photo', /\b(atelier|stage) photo\b/i],
+  ['Club de lecture', /\b(club de lecture|arpentage)\b/i],
+  ['Yoga', /\byoga\b/i],
+  ['Méditation', /\bm[eé]ditation\b/i],
+  ['Qi gong', /\b(qi[- ]?gong|ta[iï][- ]?chi)\b/i],
+  ['Sophrologie', /\bsophro/i],
+  ['Vide-grenier', /\bvide[- ]?greniers?\b/i],
+  ['Brocante', /\bbrocante\b/i],
+  ['Bourse & troc', /\b(bourse aux|troc)\b/i],
+  ['Pétanque', /\b(p[eé]tanque|concours de boules)\b/i],
+  ['Fête votive', /\bf[eê]te votive\b/i],
+  ['Bal populaire', /\bbal populaire\b/i],
+  ['Carnaval', /\bcarnaval\b/i],
+  ['Fête & loto', /\bloto\b/i],
+  ['Randonnée', /\brandonn[eé]e\b/i],
+  ['Commémoration', /\bcomm[eé]moration\b/i],
+  ['Portes ouvertes', /\bportes? ouvertes?\b/i],
   ['Musique', /\b(concert|musique|chant|chorale|dj|fanfare|jazz|rock|lyrique|classique|apéro[- ]?concert)\b/i],
   ['Spectacles vivants', /\b(spectacle|cirque|arts de la rue|déambulation)\b/i],
   ['Théâtre', /\b(th[eé][aâ]tre|pi[eè]ce|impro)\b/i],
@@ -26,7 +56,10 @@ const CAT_RULES = [
   ['Atelier', /\b(atelier|stage|initiation)\b/i],
   ['Festival', /\b(festival|f[eê]te de|feria)\b/i],
   ['Conférence', /\b(conf[eé]rence|d[eé]bat|rencontre|caf[eé][- ]philo)\b/i],
-  ['Marché', /\b(march[eé]|brocante|vide[- ]?greniers?|foire)\b/i],
+  // ⚠ Pas de `\b` après le « é » : pour JavaScript, une lettre accentuée n'est
+  // pas une lettre, et « Marché de producteurs » n'était jamais reconnu.
+  ['Marché', /\bmarch[eé]s?(?![a-zà-ÿ])/i],
+  ['Foire & salon', /\b(foire|salon)\b/i],
 ]
 
 function detectCategory(text) {
