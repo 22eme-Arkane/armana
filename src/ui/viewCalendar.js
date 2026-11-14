@@ -8,20 +8,22 @@ import { isLoggedIn } from '../lib/auth.js'
 import {
   appliquerFiltres,
   basculerTarif,
-  choisirStyleSeul,
   getDepartementsEffectifs,
   getQuand,
-  getStyles,
   getTarifs,
+  getUnivers,
   joursDeQuand,
   nbFiltresActifs,
   onFilterChange,
   setQuand,
+  setUnivers,
 } from '../lib/filter.js'
+import { UNIVERS } from '../lib/univers.js'
 import { ouvrirFiltres } from './filtres.js'
 import './enteteAgenda.css'
+import './associations.css'
 import { dayKey, eventDayKeys, isRecurring, recurrenceDaysLabel } from '../lib/recurrence.js'
-import { CATEGORIES, listApprovedEvents, listGemEventIds } from '../lib/events.js'
+import { listApprovedEvents, listGemEventIds } from '../lib/events.js'
 
 // Les jours couverts par un événement (multi-jours ET récurrence) sont calculés
 // dans un seul endroit, partagé avec la Carte : src/lib/recurrence.js.
@@ -81,37 +83,34 @@ export async function viewCalendar() {
   // filtres) et c'était mieux avant. Il reste sur Carte, Favoris et Profil.
   head.appendChild(logo)
 
-  // --- Filtre par style, sous le titre et AU-DESSUS des filtres rapides ---
-  // On choisit d'abord le genre de sortie, puis le moment. Le filtre est celui
-  // de src/lib/filter.js : il est partagé avec la Carte, donc une catégorie
-  // choisie ici reste active en passant sur l'onglet Carte, et inversement.
-  const catRow = el('div', 'chips-row chips-row--studio chips-row--cats')
-  const catChips = []
-  const addCat = (label, value) => {
-    const c = el('button', 'chip', label)
-    c.dataset.value = value ?? ''
-    c.addEventListener('click', () => {
-      // ⚠ RACCOURCI, PAS UN FILTRE CONCURRENT. Un appui retient ce style SEUL
-      // — le geste d'avant, même rapidité — et un second le relâche. Les
-      // combinaisons se font dans le panneau, sur LE MÊME état : si deux
-      // styles y sont cochés, les deux puces s'allument ici.
-      choisirStyleSeul(value)
-    })
-    catChips.push(c)
-    catRow.appendChild(c)
-  }
-  addCat('Tous les styles', null)
-  for (const c of CATEGORIES) addCat(c, c)
+  // --- Les UNIVERS, sous le titre et AU-DESSUS des filtres rapides ----------
+  // (14/11/2026) Culture, Ateliers, Vie locale : un seul à la fois, Culture
+  // par défaut (lib/univers.js). Ils prennent LA PLACE de la rangée de styles
+  // (« Tous les styles », « Musique »…), à la demande de Matthieu : deux
+  // rangées en plus des filtres rapides chargeaient trop l'en-tête. Les styles
+  // se choisissent désormais dans le panneau Filtres, où ils se combinent.
+  // Même allure que l'ancienne rangée — contour blanc, choisi en jaune —, pour
+  // ne pas se confondre avec la barre translucide des filtres rapides.
+  const universRow = el('div', 'chips-row chips-row--studio chips-row--cats chips-row--univers')
+  universRow.setAttribute('role', 'tablist')
+  const universBtns = UNIVERS.map((u) => {
+    const b = el('button', 'chip', u.nom)
+    b.type = 'button'
+    b.setAttribute('role', 'tab')
+    b.dataset.cle = u.cle
+    b.addEventListener('click', () => setUnivers(u.cle))
+    universRow.appendChild(b)
+    return b
+  })
+  head.appendChild(universRow)
   const paintCats = () => {
-    const retenus = getStyles()
-    for (const c of catChips) {
-      const v = c.dataset.value
-      // « Tous les styles » s'allume quand rien n'est retenu.
-      c.classList.toggle('is-active', v ? retenus.has(v) : retenus.size === 0)
+    const u = getUnivers()
+    for (const b of universBtns) {
+      b.classList.toggle('is-active', b.dataset.cle === u)
+      b.setAttribute('aria-selected', String(b.dataset.cle === u))
     }
   }
   paintCats()
-  head.appendChild(catRow)
 
   // --- Filtres rapides ---
   // ⚠ « Gratuit » et « Tout » ont disparu, et ce n'est pas une perte.
@@ -315,7 +314,11 @@ export async function viewCalendar() {
   const grid = el('div', 'calendar__grid')
   cal.appendChild(grid)
   wrap.appendChild(cal)
-  wrap.appendChild(calendarToggle)
+  // La ligne du petit rond : centré, avec de la place libre de part et
+  // d'autre. Le lien vers les associations s'y loge, à droite (plus bas).
+  const ligneCalendrier = el('div', 'ligne-calendrier')
+  ligneCalendrier.append(el('span'), calendarToggle)
+  wrap.appendChild(ligneCalendrier)
 
   calendarToggle.addEventListener('click', () => {
     const willOpen = cal.hidden
@@ -378,14 +381,30 @@ export async function viewCalendar() {
   // --- Liste des événements ---
   const sectionLabel = el('h2', 'section-label')
   const list = el('div', 'events-list')
+
+  // L'entrée vers l'annuaire des associations (14/11/2026) : un simple lien,
+  // dans les univers Ateliers et Vie locale, logé à droite du petit rond du
+  // calendrier — une place libre, qui n'ajoute pas une ligne.
+  // ⚠ PAS DE BANDEAU : le premier essai, une grande carte violette entre le
+  // calendrier et la liste, « surchargeait la page d'accueil » (Matthieu).
+  const lienAsso = el('button', 'asso-lien')
+  lienAsso.type = 'button'
+  lienAsso.append(icon('users'), el('span', null, 'Associations'), icon('chevronRight'))
+  lienAsso.addEventListener('click', () => navigate('/associations'))
+  ligneCalendrier.appendChild(lienAsso)
   wrap.appendChild(sectionLabel)
   wrap.appendChild(list)
+  const peindreEntreeAsso = () => {
+    lienAsso.hidden = getUnivers() === 'culture'
+  }
+  peindreEntreeAsso()
 
   /** ⚠ TOUT PASSE PAR ICI. L'état de filtre est partagé et peut changer
    *  depuis la rangée comme depuis le panneau : un seul abonnement redessine
    *  l'ensemble, plutôt que trois appels recopiés à chaque endroit. */
   function toutRedessiner() {
     paintCats()
+    peindreEntreeAsso()
     paintChips()
     repaintCalendar()
     repaintList()
@@ -440,6 +459,13 @@ export async function viewCalendar() {
     // après les rendez-vous du 30. On parcourt donc `shown`, déjà trié par
     // date, en ne gardant que la PREMIÈRE occurrence de chaque événement —
     // sa place dans la liste est celle de son premier jour visible.
+    //
+    // ⚠ LES RENDEZ-VOUS QUI REVIENNENT AUSSI, ET C'EST VOULU (14/11/2026).
+    // J'avais essayé une carte à chaque date pour « Le Jeu de Peindre » (tous
+    // les vendredis d'octobre à juin) : il apparaissait alors deux, quatre,
+    // cinq fois dans la liste. Matthieu a préféré la carte unique avec sa
+    // plage (« 20 NOV → 4 JUIN »). Les pastilles du calendrier, elles, restent
+    // sur les seuls vendredis, et toucher un autre jour ne le montre pas.
     const aujourdHui = dayKey(new Date())
     const dejaVu = new Set()
     const cartes = []

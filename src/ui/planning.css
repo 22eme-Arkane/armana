@@ -172,6 +172,24 @@
 .choix-lieu__option--adresse { flex-direction: column; align-items: flex-start; gap: 0.05rem; }
 .choix-lieu__option--adresse strong { overflow-wrap: anywhere; }
 .choix-lieu__option--adresse span { white-space: normal; }
+/* Food trucks annoncés sur un événement (formulaire Publier, 14/11/2026) :
+   les retenus en pastilles jaunes, les propositions, puis la recherche. */
+.ft-choix { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.3rem; }
+.ft-choix__retenus { display: flex; flex-direction: column; gap: 0.35rem; }
+.ft-choix__retenus:empty,
+.ft-choix__suggestions:empty { display: none; }
+.ft-choix__retenu { align-items: center; }
+.ft-choix__texte { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.ft-choix__texte strong { overflow-wrap: anywhere; }
+.ft-choix__texte span { font-size: 0.76rem; opacity: 0.75; }
+.ft-choix__suggestions { display: flex; flex-direction: column; gap: 0.3rem; }
+.ft-choix__titre { font-size: 0.8rem; font-weight: 800; color: #f4ca15; }
+.ft-choix__suggestion { border: 2px solid #f4ca15; }
+.choix-lieu__option .ft-choix__ajouter { margin-top: 0.2rem; opacity: 1; color: #0b55c5; font-weight: 800; }
+.ft-choix [hidden] { display: none !important; }
+/* L'aide sous les food trucks collait au libellé « Menu » qui suit. */
+.resto__corps > .form__hint { margin-bottom: 0.7rem; }
+
 /* « Est-ce ce lieu ? » — la proposition tirée du nom du lieu (formulaire Publier). */
 .lieu-trouve { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.45rem; }
 .lieu-trouve:empty { display: none; }

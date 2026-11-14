@@ -50,18 +50,24 @@ function aujourdhui() {
  */
 export const demoGestion = () => import('./demoGestion.js')
 
-/** Une image de remplacement (SVG) : aplat de couleur, camion, légende. */
-export function image(fond, texte) {
+const PICTOS = {
+  truck:
+    '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/>' +
+    '<path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>' +
+    '<circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+  users:
+    '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>' +
+    '<path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+}
+
+/** Une image de remplacement (SVG) : aplat de couleur, pictogramme, légende. */
+export function image(fond, texte, picto = 'truck') {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
     <rect width="800" height="500" fill="${fond}"/>
     <g transform="translate(310 130) scale(7.5)" fill="none" stroke="#fff4df" stroke-width="1.6"
-       stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/>
-      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
-      <circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
-    </g>
+       stroke-linecap="round" stroke-linejoin="round">${PICTOS[picto] ?? PICTOS.truck}</g>
     <text x="400" y="440" text-anchor="middle" font-family="sans-serif" font-size="34"
-          font-weight="700" fill="#fff4df">${texte}</text>
+          font-weight="700" fill="#fff4df">${String(texte).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>
   </svg>`
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
 }
@@ -148,9 +154,144 @@ function camions() {
   ]
 }
 
+/** Les camions de démonstration, au format d'une recherche de fiches. */
+export function demoCamions() {
+  if (!demoActif()) return []
+  const depts = { Forcalquier: '04', Manosque: '04', Sisteron: '04' }
+  return camions().map((c) => ({ id: c.id, name: c.name, cuisine: c.cuisine, dept: depts[c.address] ?? null }))
+}
+
+/**
+ * Les associations de démonstration (14/11/2026), pour voir l'annuaire et la
+ * fiche avant la migration 0041. Noms inventés.
+ */
+function associations() {
+  const base = { kind: 'association', status: 'approved', owner_id: 'demo', menu: null, cuisine: null, product_photo_url: null, gallery_urls: [] }
+  return [
+    {
+      ...base,
+      id: 'demo-asso-yoga',
+      name: 'Souffle & Lumière',
+      domaine: 'Bien-être',
+      description: 'Association de yoga et de méditation : cours collectifs toute l’année, stages en été, ouverts aux débutants.',
+      opening_hours: 'Hatha yoga le mardi à 18 h 30 et le jeudi à 9 h 30, salle des fêtes.\nMéditation le dimanche à 10 h.',
+      address: 'Salle des fêtes, 04300 Forcalquier',
+      website: null,
+      contact: '06 00 00 00 00',
+      dept: '04',
+      lat: 43.9601,
+      lng: 5.7808,
+      photo_url: image('#0b55c5', 'Souffle & Lumière', 'users'),
+    },
+    {
+      ...base,
+      id: 'demo-asso-foot',
+      name: 'Union sportive du Luberon',
+      domaine: 'Sport',
+      description: 'Club de football amateur : école de foot dès 6 ans, équipes seniors et vétérans. Tournoi de printemps chaque année.',
+      opening_hours: 'Entraînements le mercredi à 14 h (enfants) et le vendredi à 19 h (adultes), stade municipal.',
+      address: 'Stade municipal, 04100 Manosque',
+      website: null,
+      contact: 'contact@exemple.org',
+      dept: '04',
+      lat: 43.8341,
+      lng: 5.7838,
+      photo_url: image('#26784c', 'US Luberon', 'users'),
+    },
+    {
+      ...base,
+      id: 'demo-asso-jardin',
+      name: 'Les Jardins partagés de Mane',
+      domaine: 'Environnement',
+      description: 'Un jardin collectif, des ateliers de semis et de compost, une grainothèque. Tout le monde peut venir mettre les mains dans la terre.',
+      opening_hours: 'Jardinage collectif le samedi de 9 h à 12 h.',
+      address: 'Chemin des Jardins, 04300 Mane',
+      website: null,
+      contact: null,
+      dept: '04',
+      lat: 43.9381,
+      lng: 5.7466,
+      photo_url: image('#062b1d', 'Jardins partagés', 'users'),
+    },
+    {
+      ...base,
+      id: 'demo-asso-fetes',
+      name: 'Comité des fêtes de Sisteron',
+      domaine: 'Loisirs',
+      description: 'Bals, lotos, fête votive et marché de Noël : le comité anime le village toute l’année.',
+      opening_hours: null,
+      address: '04200 Sisteron',
+      website: null,
+      contact: null,
+      dept: '04',
+      lat: 44.1953,
+      lng: 5.9441,
+      photo_url: image('#f04b2f', 'Comité des fêtes', 'users'),
+    },
+    ...associationsEnNombre(),
+  ]
+}
+
+/**
+ * Une soixantaine d'associations de plus, réparties sur toute la France, pour
+ * juger l'annuaire quand il y en a BEAUCOUP (Matthieu : « pas de liste
+ * infinie »). Noms génériques, inventés ; aucune n'existe dans la base.
+ */
+function associationsEnNombre() {
+  const villes = [
+    ['04', 'Digne-les-Bains'], ['05', 'Gap'], ['05', 'Briançon'], ['06', 'Nice'], ['06', 'Antibes'],
+    ['13', 'Marseille'], ['13', 'Aix-en-Provence'], ['13', 'Arles'], ['83', 'Toulon'], ['83', 'Hyères'],
+    ['84', 'Avignon'], ['84', 'Apt'], ['26', 'Valence'], ['26', 'Die'], ['69', 'Lyon'], ['38', 'Grenoble'],
+    ['75', 'Paris'], ['33', 'Bordeaux'], ['29', 'Brest'], ['67', 'Strasbourg'], ['31', 'Toulouse'], ['44', 'Nantes'],
+  ]
+  const modeles = [
+    ['Sport', 'Football club de {v}'],
+    ['Bien-être', 'Yoga et respiration, {v}'],
+    ['Culture & arts', 'Atelier théâtre de {v}'],
+    ['Solidarité', 'Entraide {v}'],
+    ['Environnement', 'Les Amis du jardin de {v}'],
+    ['Enfance & jeunesse', 'Ludothèque de {v}'],
+    ['Loisirs', 'Club de pétanque de {v}'],
+  ]
+  const teintes = ['#0b55c5', '#26784c', '#f04b2f', '#062b1d']
+  const out = []
+  villes.forEach(([dept, ville], i) => {
+    for (const k of [i, i + 3, i + 5]) {
+      const [domaine, modele] = modeles[k % modeles.length]
+      const name = modele.replace('{v}', ville)
+      out.push({
+        kind: 'association',
+        status: 'approved',
+        owner_id: 'demo',
+        id: `demo-asso-${dept}-${i}-${k}`,
+        name,
+        domaine,
+        description: 'Association de démonstration.',
+        opening_hours: null,
+        address: ville,
+        website: null,
+        contact: null,
+        dept,
+        photo_url: image(teintes[(i + k) % teintes.length], name.split(' ').slice(0, 3).join(' '), 'users'),
+        menu: null,
+        cuisine: null,
+        product_photo_url: null,
+        gallery_urls: [],
+      })
+    }
+  })
+  return out
+}
+
+export function demoAssociations() {
+  return demoActif() ? associations() : []
+}
+
 /** Une fiche de démonstration, ou null (identifiant réel, ou démo coupée). */
 export function demoFiche(id) {
   if (!demoActif() || !String(id).startsWith('demo-')) return null
+  const asso = associations().find((x) => x.id === id)
+  if (asso) return { ...asso, gallery_paths: [] }
   const c = camions().find((x) => x.id === id)
   if (!c) return null
   const { creneaux, ...fiche } = c

@@ -12,21 +12,10 @@ import { foodSurPlace } from './foodTrucks.js'
 import { chargerCommunes, villeDeLEvenement } from './communes.js'
 import { regionsDe } from './departements.js'
 import { demoActif, demoGestion } from './demo.js'
+import { RECLASSEMENT_0041, TOUTES_CATEGORIES } from './univers.js'
 
-export const CATEGORIES = [
-  'Musique',
-  'Spectacles vivants',
-  'Danse',
-  'Théâtre',
-  'Exposition',
-  'Cinéma',
-  'Atelier',
-  'Festival',
-  'Conférence',
-  'Marché',
-  'Vide-grenier',
-  'Autre',
-]
+/** Toutes les catégories — rangées par univers depuis le 14/11/2026 (lib/univers.js). */
+export const CATEGORIES = TOUTES_CATEGORIES
 
 /** URL publique d'une photo du bucket Storage 'event-photos'. */
 export function publicPhotoUrl(path) {
@@ -165,6 +154,11 @@ export async function listApprovedEvents(codes = null) {
   q = applyUpcoming(q)
   const { data, error } = await q.order('starts_at', { ascending: true })
   if (error) throw error
+  // Démonstration (?demo=1, local et préversions) : le reclassement proposé
+  // par la migration 0041, pour juger les univers avant de l'appliquer.
+  if (demoActif()) {
+    for (const ev of data) if (RECLASSEMENT_0041[ev.id]) ev.category = RECLASSEMENT_0041[ev.id]
+  }
   return attachRelations(data)
 }
 

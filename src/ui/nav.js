@@ -2,6 +2,7 @@
 import { el } from './components.js'
 import { icon } from './icons.js'
 import { iconeOnglet } from './navIcones.js'
+import { masquePublier } from './boutonMasque.js'
 import { navigate, currentRoute } from '../lib/router.js'
 import { isAdmin, isLoggedIn } from '../lib/auth.js'
 import { myPendingCount } from '../lib/moderation.js'
@@ -95,6 +96,7 @@ const PARENT = {
   '/ma-fiche': '/parametres',
   '/mon-planning': '/parametres',
   '/fiche': '/',
+  '/associations': '/',
 }
 
 /** Le « + » central : publier un événement (ou se connecter d'abord). */
@@ -103,9 +105,9 @@ function boutonPublier(path) {
   b.type = 'button'
   b.title = 'Publier un événement'
   b.setAttribute('aria-label', 'Publier un événement')
-  const carre = el('span', 'navtab-publier__carre')
-  carre.appendChild(icon('plus'))
-  b.appendChild(carre)
+  // Le masque du logo et sa pastille « + » (14/11/2026) — voir boutonMasque.js.
+  // Il remplace le carré bleu penché d'avant.
+  b.appendChild(masquePublier())
   if (path === '/publier') b.classList.add('is-active')
   b.addEventListener('click', () => navigate(isLoggedIn() ? '/publier' : '/connexion'))
   return b

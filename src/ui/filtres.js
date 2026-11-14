@@ -7,7 +7,7 @@ import { el } from './components.js'
 import { icon } from './icons.js'
 import { ouvrirCalendrier } from './calendrier.js'
 import { carteDepartements } from './carteDepts.js'
-import { CATEGORIES } from '../lib/events.js'
+import { UNIVERS, categoriesDe } from '../lib/univers.js'
 import { CODES_DEPARTEMENTS, deptsDeRegion, regionDuDept, resumeTerritoire } from '../lib/departements.js'
 import { listeParRegion } from './parRegion.js'
 import './filtres.css'
@@ -26,9 +26,11 @@ import {
   setJourPrecis,
   getStyles,
   getTarifs,
+  getUnivers,
   nbFiltresActifs,
   resetFiltres,
   setQuand,
+  setUnivers,
 } from '../lib/filter.js'
 
 const TARIFS = [
@@ -225,13 +227,37 @@ export function ouvrirFiltres(onChange) {
     choisirDate.textContent = j ? libelleQuand() + ' ×' : 'Choisir une date'
   })
 
-  // --- Styles ---------------------------------------------------------------
+  // --- Univers et styles (14/11/2026) -------------------------------------------
+  // L'univers d'abord — c'est aussi d'ici qu'on le change depuis la Carte —,
+  // puis les styles de CET univers seulement.
+  const blocStyles = bloc('Univers et styles', icon('ticket'), 'jaune', null)
   pastilles(
-    bloc('Styles', icon('ticket'), 'jaune', 'Plusieurs styles possibles. Aucun coché = tous les styles.'),
-    CATEGORIES.map((c) => ({ cle: c, texte: c })),
-    (c) => getStyles().has(c),
-    (c) => basculerStyle(c)
-  )
+    blocStyles,
+    UNIVERS.map((u) => ({ cle: u.cle, texte: u.nom })),
+    (u) => getUnivers() === u,
+    (u) => setUnivers(u)
+  ).classList.add('choix--univers')
+  blocStyles.appendChild(el('p', 'feuille__aide', 'Plusieurs styles possibles. Aucun coché = tous les styles.'))
+  const rangeeStyles = el('div')
+  blocStyles.appendChild(rangeeStyles)
+  let universStyles = null
+  peintres.push(() => {
+    if (getUnivers() === universStyles) return
+    universStyles = getUnivers()
+    rangeeStyles.innerHTML = ''
+    // Les pastilles se reconstruisent : on retire leur ancien peintre.
+    const avant = peintres.length
+    pastilles(
+      rangeeStyles,
+      categoriesDe(universStyles).map((c) => ({ cle: c, texte: c })),
+      (c) => getStyles().has(c),
+      (c) => basculerStyle(c)
+    )
+    const nouveau = peintres.splice(avant, 1)[0]
+    peintreStyles = nouveau
+  })
+  let peintreStyles = null
+  peintres.push(() => peintreStyles?.())
 
   // --- Tarif ----------------------------------------------------------------
   pastilles(bloc('Tarif', '€', 'vert', null), TARIFS, (t) => getTarifs().has(t), (t) => basculerTarif(t))

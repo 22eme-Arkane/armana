@@ -17,6 +17,8 @@ export const TYPES_COMPTE = [
   { cle: 'particulier', texte: 'Particulier' },
   { cle: 'lieu', texte: 'Lieu culturel' },
   { cle: 'food_truck', texte: 'Food truck' },
+  // Migration 0041 (14/11/2026) : un club, une asso de yoga, un comité des fêtes.
+  { cle: 'association', texte: 'Association' },
 ]
 const CLES_TYPE = TYPES_COMPTE.map((t) => t.cle)
 

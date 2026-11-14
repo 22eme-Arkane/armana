@@ -2,6 +2,7 @@
 import './style.css'
 import { isConfigured } from './lib/supabaseClient.js'
 import { initTheme } from './lib/theme.js'
+import { bloquerZoomPage } from './lib/zoom.js'
 import { initUpdateCheck, reloadForUpdate } from './lib/update.js'
 import { initAuth, onAuthChange, getUser } from './lib/auth.js'
 import { defineRoutes, startRouter, refresh } from './lib/router.js'
@@ -66,6 +67,9 @@ try {
 
 // Thème (redondant avec le script inline de index.html, garantit la cohérence).
 initTheme()
+
+// Pas de zoom de page sur iPhone : une fausse manœuvre la laissait débordante.
+bloquerZoomPage()
 
 const app = document.querySelector('#app')
 app.innerHTML = ''
@@ -145,6 +149,8 @@ defineRoutes(
     // pointent vers /#/candidatures.
     '/candidatures': viewAdmins,
     '/connexion': viewAuth,
+    // L'annuaire des associations (14/11/2026), chargé à la demande.
+    '/associations': async (ctx) => (await import('./ui/viewAssociations.js')).viewAssociations(ctx),
   },
   {
     notFound: () => {

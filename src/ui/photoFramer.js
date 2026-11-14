@@ -35,6 +35,9 @@ export function createPhotoFramer(box, img) {
   let objectUrl = null
 
   box.style.touchAction = 'none' // sinon le glissement fait défiler la page
+  // Le pincement y reste permis : le blocage du zoom de page (lib/zoom.js)
+  // laisse passer les zones marquées ainsi.
+  box.dataset.zoomLibre = ''
   box.style.cursor = 'grab'
 
   const pret = () => box.clientWidth && box.clientHeight && state.w && state.h

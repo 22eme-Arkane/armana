@@ -8,7 +8,7 @@ import { supabase } from './supabaseClient.js'
 import { getUser } from './auth.js'
 import { toWebp } from './image.js'
 import { ecrirePoint, lirePoint } from './point.js'
-import { demoActif, demoFiche, demoGestion } from './demo.js'
+import { demoActif, demoAssociations, demoFiche, demoGestion } from './demo.js'
 
 const BUCKET = 'event-photos'
 // Calculée ici plutôt qu'importée d'events.js : events.js importe ce module
@@ -28,7 +28,23 @@ export const LIMITES = {
   address: 300,
   cuisine: 80,
   menu: 2000,
+  // Association : son domaine d'activité (migration 0041), choisi dans DOMAINES.
+  domaine: 40,
 }
+
+/**
+ * Les domaines d'une association (14/11/2026). Choisis, jamais tapés. Chacun
+ * renvoie vers l'univers où l'on cherchera l'association (lib/univers.js).
+ */
+export const DOMAINES = [
+  { cle: 'Sport', univers: 'vie-locale' },
+  { cle: 'Bien-être', univers: 'ateliers' },
+  { cle: 'Culture & arts', univers: 'culture' },
+  { cle: 'Solidarité', univers: 'vie-locale' },
+  { cle: 'Environnement', univers: 'vie-locale' },
+  { cle: 'Enfance & jeunesse', univers: 'vie-locale' },
+  { cle: 'Loisirs', univers: 'vie-locale' },
+]
 
 /** Ajoute les adresses publiques des photos. */
 function enrichir(f) {
@@ -52,20 +68,71 @@ const COLONNES_BASE =
   'id, owner_id, kind, name, description, website, contact, opening_hours, address, location, ' +
   'cuisine, menu, photo_path, product_photo_path, dept, status, reviewed_at, created_at, updated_at'
 
-// ⚠ La galerie arrive avec la migration 0034. Tant qu'elle n'est pas
-// appliquée, demander la colonne ferait échouer TOUTE lecture de fiche : on
-// retente sans, et on s'en souvient pour la suite de la visite.
+// ⚠ La galerie arrive avec la migration 0034, le domaine des associations
+// avec la 0041. Tant qu'elles ne sont pas appliquées, demander la colonne
+// ferait échouer TOUTE lecture de fiche : on retente sans, et on s'en souvient
+// pour la suite de la visite.
 let avecGalerie = true
-const colonnes = () => (avecGalerie ? COLONNES_BASE + ', gallery_paths' : COLONNES_BASE)
+let avecDomaine = true
+const colonnes = () =>
+  COLONNES_BASE + (avecGalerie ? ', gallery_paths' : '') + (avecDomaine ? ', domaine' : '')
+
+/** Une colonne optionnelle manque : on la retire, et on le dit (true = retenter). */
+function sansColonneManquante(error) {
+  if (!error) return false
+  if (avecGalerie && /gallery_paths/.test(error.message)) return !(avecGalerie = false)
+  if (avecDomaine && /domaine/.test(error.message)) return !(avecDomaine = false)
+  return false
+}
 
 async function lireFiche(filtre) {
   let r = await filtre(supabase.from('fiches').select(colonnes())).maybeSingle()
-  if (r.error && avecGalerie && /gallery_paths/.test(r.error.message)) {
-    avecGalerie = false
+  while (sansColonneManquante(r.error)) {
     r = await filtre(supabase.from('fiches').select(colonnes())).maybeSingle()
   }
   if (r.error) throw r.error
   return enrichir(r.data)
+}
+
+/**
+ * L'INDEX de l'annuaire des associations : toutes celles qui sont publiées,
+ * mais seulement leur nom, leur département et leur domaine — de quoi compter
+ * par région et par département, et chercher par nom, sans rien télécharger
+ * de lourd. Le détail (photo, adresse) ne se charge que pour ce qui s'affiche :
+ * voir `associationsParIds`.
+ * Ne lève jamais : sans la migration 0041, aucune association n'existe.
+ * @returns {Promise<Array<{id:string, name:string, dept:string|null, domaine:string|null}>>}
+ */
+export async function indexAssociations() {
+  if (demoActif()) return demoAssociations().map(({ id, name, dept, domaine }) => ({ id, name, dept, domaine }))
+  const lire = () =>
+    supabase
+      .from('fiches')
+      .select('id, name, dept' + (avecDomaine ? ', domaine' : ''))
+      .eq('kind', 'association')
+      .eq('status', 'approved')
+      .order('name')
+      .limit(5000)
+  let r = await lire()
+  while (sansColonneManquante(r.error)) r = await lire()
+  return r.error ? [] : r.data
+}
+
+/** Le détail des associations demandées, dans l'ordre donné. */
+export async function associationsParIds(ids) {
+  if (!ids.length) return []
+  let liste
+  if (demoActif()) {
+    liste = demoAssociations()
+  } else {
+    const lire = () => supabase.from('fiches').select(colonnes()).in('id', ids)
+    let r = await lire()
+    while (sansColonneManquante(r.error)) r = await lire()
+    if (r.error) return []
+    liste = r.data.map(enrichir)
+  }
+  const parId = new Map(liste.map((a) => [a.id, a]))
+  return ids.map((id) => parId.get(id)).filter(Boolean)
 }
 
 /** La fiche de la personne connectée, ou null. */
@@ -149,6 +216,8 @@ export async function enregistrerFiche(champs) {
   if ('photo_path' in champs) ligne.photo_path = champs.photo_path
   if ('product_photo_path' in champs) ligne.product_photo_path = champs.product_photo_path
   if ('gallery_paths' in champs) ligne.gallery_paths = champs.gallery_paths.slice(0, GALERIE_MAX)
+  // Sans la migration 0041, la colonne n'existe pas : ne pas l'envoyer.
+  if (!avecDomaine) delete ligne.domaine
   if (Number.isFinite(champs.lat) && Number.isFinite(champs.lng)) {
     ligne.location = ecrirePoint(champs.lat, champs.lng)
   } else if (champs.lat === null) {
@@ -157,7 +226,13 @@ export async function enregistrerFiche(champs) {
   // ⚠ MISE À JOUR D'ABORD, CRÉATION ENSUITE — pas d'upsert. Un upsert vérifie
   // les colonnes obligatoires (nom, type) de la ligne proposée AVANT de voir
   // qu'elle existe déjà : retirer une seule photo échouait faute de nom.
-  const maj = await supabase.from('fiches').update(ligne).eq('owner_id', uid).select(colonnes())
+  // (Une colonne optionnelle absente fait échouer la requête ENTIÈRE, écriture
+  // comprise : on peut donc retenter sans elle sans rien écrire deux fois.)
+  let maj = await supabase.from('fiches').update(ligne).eq('owner_id', uid).select(colonnes())
+  while (sansColonneManquante(maj.error)) {
+    if (!avecDomaine) delete ligne.domaine
+    maj = await supabase.from('fiches').update(ligne).eq('owner_id', uid).select(colonnes())
+  }
   if (maj.error) throw maj.error
   if (maj.data?.length) return enrichir(maj.data[0])
   const { data, error } = await supabase.from('fiches').insert(ligne).select(colonnes()).single()

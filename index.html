@@ -2,7 +2,18 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      ⚠ ZOOM BLOQUÉ (Matthieu, 14/11/2026) : sur iPhone, une fausse manœuvre
+      — pincer, ou toucher un champ de saisie, que Safari agrandit de lui-même
+      quand son texte fait moins de 16 px — laissait l'application zoomée,
+      débordant à droite, sans qu'on sache revenir. `maximum-scale=1` empêche
+      l'agrandissement au toucher d'un champ ; le pincement, que Safari laisse
+      passer malgré `user-scalable=no`, est arrêté dans src/lib/zoom.js.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <meta name="theme-color" content="#f9d44d" />
     <!--
       Aperçu du lien quand on partage Armana (WhatsApp, Messenger, SMS…).

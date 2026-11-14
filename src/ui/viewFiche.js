@@ -28,7 +28,7 @@ import {
 import './planning.css'
 import { formatPrix, lireMenu } from '../lib/menu.js'
 
-const LIBELLE = { lieu: 'Lieu culturel', food_truck: 'Food truck' }
+const LIBELLE = { lieu: 'Lieu culturel', food_truck: 'Food truck', association: 'Association' }
 const ICONE_CONTACT = { web: 'globe', tel: 'phone', mail: 'mail' }
 
 export async function viewFiche({ query } = {}) {
@@ -38,7 +38,7 @@ export async function viewFiche({ query } = {}) {
   // Le titre dit ce qu'on regarde : « Food truck » pour un camion (Matthieu,
   // 15/10/2026), « À découvrir » pour un lieu.
   wrap.appendChild(
-    studioHeader(f?.kind === 'food_truck' ? 'Food truck' : 'À découvrir', {
+    studioHeader(f?.kind === 'food_truck' ? 'Food truck' : f?.kind === 'association' ? 'Association' : 'À découvrir', {
       backLabel: 'Retour',
       onBack: () => history.back(),
     })
@@ -59,8 +59,12 @@ export async function viewFiche({ query } = {}) {
   if (f.photo_url) wrap.appendChild(photo(f.photo_url, f.name))
   const entete = el('section', 'fiche-entete' + (f.photo_url ? '' : ' fiche-entete--seule'))
   const haut = el('div', 'fiche-entete__haut')
-  // Le titre de page dit déjà « Food truck » : inutile de le répéter.
-  if (f.kind !== 'food_truck') haut.appendChild(el('span', 'fiche-categorie', LIBELLE[f.kind]))
+  // Le titre de page dit déjà « Food truck » : inutile de le répéter. Une
+  // association montre son domaine (« Sport », « Bien-être ») plutôt que son type.
+  const estAsso = f.kind === 'association'
+  if (f.kind !== 'food_truck') {
+    haut.appendChild(el('span', 'fiche-categorie', estAsso ? f.domaine || 'Association' : LIBELLE[f.kind]))
+  }
   haut.appendChild(el('h2', 'fiche-titre', f.name))
   const sous = f.kind === 'food_truck' ? f.cuisine : f.address ? villeDeLAdresse(f.address) : null
   if (sous) haut.appendChild(el('p', 'fiche-entete__sous', sous))
@@ -105,19 +109,21 @@ export async function viewFiche({ query } = {}) {
   ajouterCarte(wrap, 'En photo', blocGalerie(f.gallery_urls, f.name))
   // Un food truck n'a pas d'horaires en texte libre : « Sa semaine » (le
   // planning, plus haut) les donne, jour par jour et commune par commune.
-  if (!estTruck) ajouterCarte(wrap, 'Horaires d’ouverture', texte(f.opening_hours))
+  if (!estTruck) ajouterCarte(wrap, estAsso ? 'Activités et horaires' : 'Horaires d’ouverture', texte(f.opening_hours))
 
   // Infos pratiques : l'adresse et ce qui reste du contact (le nom d'une
   // personne, par exemple), les liens étant devenus des boutons plus haut.
   const infos = el('div', 'fiche-infos')
-  if (f.address) infos.appendChild(info('pin', estTruck ? 'Basé à' : 'Adresse', f.address))
+  if (f.address) infos.appendChild(info('pin', estTruck ? 'Basé à' : estAsso ? 'Où' : 'Adresse', f.address))
   if (contact.reste) infos.appendChild(info('message', 'Contact', contact.reste))
   if (infos.children.length) ajouterCarte(wrap, 'Infos pratiques', infos)
 
   // --- Ce qu'il publie sur Armana ---------------------------------------------
   const evs = await listEventsByAuthor(f.owner_id).catch(() => [])
   if (evs.length) {
-    wrap.appendChild(el('h3', 'fiche-section-bleue', f.kind === 'food_truck' ? 'Ses prochains rendez-vous' : 'À l’affiche ici'))
+    wrap.appendChild(
+      el('h3', 'fiche-section-bleue', f.kind === 'lieu' ? 'À l’affiche ici' : 'Ses prochains rendez-vous')
+    )
     const liste = el('div', 'events-list fiche-evenements')
     evs.forEach((ev, i) => liste.appendChild(posterEventCard(ev, { index: i })))
     wrap.appendChild(liste)

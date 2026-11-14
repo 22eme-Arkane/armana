@@ -9,10 +9,18 @@ export const TYPES_VISUELS = {
   particulier: { libelle: 'Particulier', couleur: '#0b55c5', icone: null },
   lieu: { libelle: 'Lieu culturel', couleur: '#26784c', icone: 'landmark' },
   food_truck: { libelle: 'Food truck', couleur: '#f04b2f', icone: 'truck' },
+  // Jaune d'Armana, encre sombre dessus (14/11/2026). Le violet du premier
+  // essai a été refusé : « pas dans les tons d'Armana ».
+  association: { libelle: 'Association', couleur: '#f4ca15', encre: '#062b1d', icone: 'users' },
 }
 
 export function typeVisuel(type) {
   return TYPES_VISUELS[type] ?? TYPES_VISUELS.particulier
+}
+
+/** « Ma fiche de lieu », « … de food truck », « … d'association ». */
+export function titreMaFiche(type) {
+  return { food_truck: 'Ma fiche de food truck', association: 'Ma fiche d’association' }[type] ?? 'Ma fiche de lieu'
 }
 
 /** Deux lettres pour la pastille : première du prénom, première du nom. */
@@ -35,6 +43,7 @@ export function avatarMembre(nom, type, taille = 'normal') {
   const v = typeVisuel(type)
   const a = el('span', `avatar-membre avatar-membre--${taille}`)
   a.style.background = v.couleur
+  if (v.encre) a.style.color = v.encre
   if (v.icone) a.appendChild(icon(v.icone))
   else a.textContent = initiales(nom)
   a.setAttribute('aria-hidden', 'true')
@@ -46,5 +55,6 @@ export function etiquetteType(type) {
   const v = typeVisuel(type)
   const t = el('span', 'etiquette-type', v.libelle)
   t.style.background = v.couleur
+  if (v.encre) t.style.color = v.encre
   return t
 }

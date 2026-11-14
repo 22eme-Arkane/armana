@@ -14,6 +14,7 @@
 import './profil.css'
 import { el, loginPrompt } from './components.js'
 import { studioHeader } from './studio.js'
+import { titreMaFiche } from './typeCompte.js'
 import { navigate } from '../lib/router.js'
 import {
   NOM_MAX,
@@ -175,7 +176,7 @@ function blocType() {
       boutons[i].setAttribute('aria-checked', String(t.cle === actuel))
     })
     ficheBtn.hidden = actuel === 'particulier'
-    ficheBtn.textContent = actuel === 'food_truck' ? 'Ma fiche de food truck' : 'Ma fiche de lieu'
+    ficheBtn.textContent = titreMaFiche(actuel)
   }
   peindre()
 

@@ -126,6 +126,8 @@
   font: 700 13px/1 var(--font-display, system-ui, sans-serif);
   box-shadow: 0 2px 5px rgba(6, 43, 29, 0.35);
 }
+/* Sur la goutte bleue (Vie locale), un nombre bleu se perdrait : en jaune. */
+.marqueur-armana--vie-locale .marqueur-armana__nombre { background: #f4ca15; color: #062b1d; }
 /* … et sa bulle les liste. */
 .bulle__tete {
   display: flex;

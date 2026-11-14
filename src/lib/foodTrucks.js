@@ -10,7 +10,7 @@
 // l'écran. Seul l'espace du camion, qui n'existe que grâce à elle, lève.
 import { supabase } from './supabaseClient.js'
 import { ecrirePoint, lirePoint } from './point.js'
-import { demoActif, demoGestion, demoPlanning, demoPresences, demoPresencesPeriode } from './demo.js'
+import { demoActif, demoCamions, demoGestion, demoPlanning, demoPresences, demoPresencesPeriode } from './demo.js'
 
 export const JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 export const JOURS_COURTS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
@@ -344,17 +344,58 @@ export async function foodSurPlace() {
 
 // --- Annonces faites par l'organisateur (migration 0035) ------------------------
 
-/** Les food trucks VALIDÉS, pour le choix à la publication d'un événement. */
-export async function foodTrucksValides() {
+/** Minuscules, sans accents ni espaces superflus : la forme qu'on compare. */
+const plat = (t) =>
+  String(t || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/**
+ * Cherche des food trucks VALIDÉS par leur nom, pour les annoncer sur un
+ * événement (Matthieu, 14/11/2026 : la liste complète, affichée d'un bloc,
+ * deviendrait interminable à mesure que les camions s'inscrivent).
+ *
+ * ⚠ LES ACCENTS. `ilike` ignore la casse, pas les accents : « crepe » ne
+ * trouverait pas « Crêpe ». Chaque voyelle (et le c) du texte tapé devient
+ * donc un joker d'UN caractère côté base — ce qui ratisse un peu large — puis
+ * on ne garde ici que les noms qui contiennent vraiment le texte, accents
+ * retirés des deux côtés. Pas de migration nécessaire.
+ *
+ * @returns {Promise<Array<{id:string, name:string, cuisine:string|null, dept:string|null}>>}
+ */
+export async function chercherFoodTrucks(texte, { limite = 8 } = {}) {
+  const q = plat(texte)
+  if (q.length < 2) return []
+  if (demoActif()) {
+    return demoCamions()
+      .filter((c) => plat(c.name).includes(q))
+      .slice(0, limite)
+  }
+  const motif =
+    '%' + [...q].map((ch) => (/[aeiouyc]/.test(ch) ? '_' : ch.replace(/[%_\\]/g, '\\$&'))).join('') + '%'
   const { data, error } = await supabase
     .from('fiches')
-    .select('id, name, cuisine, address')
+    .select('id, name, cuisine, dept')
     .eq('kind', 'food_truck')
     .eq('status', 'approved')
+    .ilike('name', motif)
     .order('name')
-    .limit(300)
-  if (error) return []
-  return data
+    .limit(40)
+  if (error) throw error
+  return (data ?? []).filter((t) => plat(t.name).includes(q)).slice(0, limite)
+}
+
+/** Les fiches de food trucks d'après leurs identifiants (les annonces d'un événement qu'on modifie). */
+export async function fichesFoodTrucks(ids) {
+  const vrais = (ids ?? []).filter((id) => !String(id).startsWith('demo-'))
+  const demo = demoActif() ? demoCamions().filter((c) => ids.includes(c.id)) : []
+  if (!vrais.length) return demo
+  const { data, error } = await supabase.from('fiches').select('id, name, cuisine, dept').in('id', vrais)
+  if (error) return demo
+  return [...demo, ...(data ?? [])]
 }
 
 /** Les camions annoncés par l'organisateur sur un événement. */
@@ -369,7 +410,8 @@ export async function foodTrucksAnnonces(eventId) {
  * retire ce qui a été décoché, ajoute ce qui a été coché.
  */
 export async function synchroniserFoodTrucks(eventId, ids) {
-  const voulus = new Set(ids)
+  // Les camions de démonstration n'existent pas en base : jamais écrits.
+  const voulus = new Set(ids.filter((id) => !String(id).startsWith('demo-')))
   const actuels = new Set(await foodTrucksAnnonces(eventId))
   const aRetirer = [...actuels].filter((id) => !voulus.has(id))
   const aAjouter = [...voulus].filter((id) => !actuels.has(id))

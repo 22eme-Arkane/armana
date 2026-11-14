@@ -16,7 +16,14 @@
 
 import { getMesDepartements, setMesDepartements } from './mesDepartements.js'
 import { dayKey } from './recurrence.js'
+import { UNIVERS, UNIVERS_PAR_DEFAUT, universDe } from './univers.js'
 
+/**
+ * L'univers regardé : Culture, Ateliers ou Vie locale (lib/univers.js).
+ * Comme le reste, il repart sur Culture à chaque lancement — et il ne compte
+ * pas comme un filtre : c'est l'endroit où l'on est, pas un tri qu'on oublie.
+ */
+let univers = UNIVERS_PAR_DEFAUT
 /** Styles retenus. Ensemble VIDE = tous les styles, jamais « aucun ». */
 let styles = new Set()
 /** Tarifs retenus ('gratuit' | 'libre' | 'payant' | 'chapeau'). Vide = tous.
@@ -47,6 +54,20 @@ const notifier = () => {
 export function onFilterChange(fn) {
   subs.add(fn)
   return () => subs.delete(fn)
+}
+
+// --- Univers -----------------------------------------------------------------
+
+export function getUnivers() {
+  return univers
+}
+
+/** Changer d'univers relâche les styles : ceux d'un autre univers n'y sont pas. */
+export function setUnivers(cle) {
+  if (!UNIVERS.some((u) => u.cle === cle) || cle === univers) return
+  univers = cle
+  styles = new Set()
+  notifier()
 }
 
 // --- Styles ------------------------------------------------------------------
@@ -255,7 +276,7 @@ export function resetFiltres() {
  * @param {(ev:object)=>string} tarifDe  lecture du tarif (composant d'UI)
  */
 export function appliquerFiltres(events, tarifDe) {
-  let out = events
+  let out = events.filter((e) => universDe(e.category) === univers)
   if (styles.size) out = out.filter((e) => styles.has(e.category))
   // Les cases cochées s'ADDITIONNENT, comme partout dans le panneau :
   // « Gratuit » + « Au chapeau » montre les deux.

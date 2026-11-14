@@ -14,6 +14,7 @@ import { choixLieu } from './choixLieu.js'
 import './planning.css'
 import { menuEditeur } from './menuEditeur.js'
 import {
+  DOMAINES,
   GALERIE_MAX,
   LIMITES,
   effacerPhotosGalerie,
@@ -51,17 +52,18 @@ export async function viewFicheEdit() {
   // l'inscription, des métadonnées (le profil n'est pas encore à jour).
   const typeProfil = getProfile()?.account_type
   const typeInscription = getUser()?.user_metadata?.account_type
+  const AVEC_FICHE = ['lieu', 'food_truck', 'association']
   const kind =
     fiche?.kind ||
-    (['lieu', 'food_truck'].includes(typeProfil) ? typeProfil : null) ||
-    (['lieu', 'food_truck'].includes(typeInscription) ? typeInscription : null)
+    (AVEC_FICHE.includes(typeProfil) ? typeProfil : null) ||
+    (AVEC_FICHE.includes(typeInscription) ? typeInscription : null)
 
   if (!kind) {
     wrap.appendChild(
       el(
         'p',
         'page__subtitle',
-        'Les fiches sont réservées aux lieux culturels et aux food trucks. ' +
+        'Les fiches sont réservées aux lieux culturels, aux food trucks et aux associations. ' +
           'Choisissez votre type de compte dans « Mon profil ».'
       )
     )
@@ -73,13 +75,18 @@ export async function viewFicheEdit() {
   }
 
   const estTruck = kind === 'food_truck'
+  // Association (migration 0041, 14/11/2026) : un club, une asso de yoga, un
+  // comité des fêtes. Même vitrine qu'un lieu, plus son DOMAINE, choisi.
+  const estAsso = kind === 'association'
   wrap.appendChild(
     el(
       'p',
       'page__subtitle',
       estTruck
         ? 'La vitrine de votre camion : ce que vous cuisinez, votre menu, comment vous joindre.'
-        : 'La vitrine de votre lieu : ce qu’on y trouve, quand c’est ouvert, comment venir.'
+        : estAsso
+          ? 'La vitrine de votre association : ce que vous proposez, quand et où, comment vous rejoindre.'
+          : 'La vitrine de votre lieu : ce qu’on y trouve, quand c’est ouvert, comment venir.'
     )
   )
 
@@ -116,17 +123,45 @@ export async function viewFicheEdit() {
   let nouvellePhoto = null
   let nouveauProduit = null
   const photo = champPhoto(
-    estTruck ? 'Photo du camion' : 'Photo du lieu',
+    estTruck ? 'Photo du camion' : estAsso ? 'Photo de l’association (logo, activité)' : 'Photo du lieu',
     fiche?.photo_url,
     (f) => (nouvellePhoto = f)
   )
   form.appendChild(photo.wrap)
 
   // --- Textes -----------------------------------------------------------------
-  const nom = champ('Nom *', 'input', fiche?.name, LIMITES.name, estTruck ? 'Le nom du camion' : 'Le nom du lieu')
+  const nom = champ(
+    'Nom *',
+    'input',
+    fiche?.name,
+    LIMITES.name,
+    estTruck ? 'Le nom du camion' : estAsso ? 'Le nom de l’association' : 'Le nom du lieu'
+  )
   nom.input.required = true
   nom.input.minLength = 2
   form.appendChild(nom.wrap)
+
+  // Le domaine : CHOISI, jamais tapé — c'est lui qui range l'association dans
+  // l'annuaire et dans le bon univers (lib/univers.js).
+  let domaine = fiche?.domaine ?? null
+  if (estAsso) {
+    const bloc = el('div', 'form__field')
+    bloc.appendChild(el('span', 'form__label', 'Domaine *'))
+    const rangee = el('div', 'choix')
+    const boutons = DOMAINES.map((d) => {
+      const b = el('button', 'choix__option', d.cle)
+      b.type = 'button'
+      b.addEventListener('click', () => {
+        domaine = d.cle
+        boutons.forEach((x) => x.classList.toggle('is-active', x.textContent === domaine))
+      })
+      rangee.appendChild(b)
+      return b
+    })
+    boutons.forEach((x) => x.classList.toggle('is-active', x.textContent === domaine))
+    bloc.appendChild(rangee)
+    form.appendChild(bloc)
+  }
 
   let cuisine = null
   if (estTruck) {
@@ -139,7 +174,11 @@ export async function viewFicheEdit() {
     'textarea',
     fiche?.description,
     LIMITES.description,
-    estTruck ? 'Votre histoire, vos produits, ce qui vous rend unique' : 'Ce qu’on y voit, ce qu’on y fait, l’ambiance'
+    estTruck
+      ? 'Votre histoire, vos produits, ce qui vous rend unique'
+      : estAsso
+        ? 'Ce que fait l’association, à qui elle s’adresse, comment la rejoindre'
+        : 'Ce qu’on y voit, ce qu’on y fait, l’ambiance'
   )
   form.appendChild(description.wrap)
 
@@ -183,11 +222,11 @@ export async function viewFicheEdit() {
     form.appendChild(bloc)
   } else {
     horaires = champ(
-      'Horaires d’ouverture',
+      estAsso ? 'Activités et horaires' : 'Horaires d’ouverture',
       'textarea',
       fiche?.opening_hours,
       LIMITES.opening_hours,
-      'Du mercredi au dimanche, 14 h – 19 h'
+      estAsso ? 'Yoga le mardi à 18 h 30, salle des fêtes · Méditation le dimanche à 10 h' : 'Du mercredi au dimanche, 14 h – 19 h'
     )
     form.appendChild(horaires.wrap)
   }
@@ -206,7 +245,13 @@ export async function viewFicheEdit() {
     base.wrap.querySelector('.form__label').textContent = 'Commune de rattachement'
     form.appendChild(base.wrap)
   } else {
-    adresse = champ('Adresse', 'input', fiche?.address, LIMITES.address, 'Rue, ville')
+    adresse = champ(
+      estAsso ? 'Lieu des activités' : 'Adresse',
+      'input',
+      fiche?.address,
+      LIMITES.address,
+      estAsso ? 'Salle, rue, ville — là où l’on vous trouve' : 'Rue, ville'
+    )
     form.appendChild(adresse.wrap)
   }
 
@@ -224,7 +269,10 @@ export async function viewFicheEdit() {
   form.appendChild(contact.wrap)
 
   // « En photo » : jusqu'à quatre photos du camion ou du lieu.
-  const galerie = galerieEditeur(fiche, estTruck ? 'Photos du camion' : 'Photos du lieu')
+  const galerie = galerieEditeur(
+    fiche,
+    estTruck ? 'Photos du camion' : estAsso ? 'Photos de vos activités' : 'Photos du lieu'
+  )
   form.appendChild(galerie.wrap)
 
   const msg = el('p', 'form__msg')
@@ -235,6 +283,11 @@ export async function viewFicheEdit() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
+    if (estAsso && !domaine) {
+      msg.className = 'form__msg form__msg--err'
+      msg.textContent = 'Choisissez le domaine de votre association.'
+      return
+    }
     submit.disabled = true
     msg.className = 'form__msg'
     msg.textContent = 'Enregistrement…'
@@ -252,6 +305,7 @@ export async function viewFicheEdit() {
         champs.cuisine = cuisine.input.value
         champs.menu = menu.valeur()
       }
+      if (estAsso) champs.domaine = domaine
       // Un point sur la carte seulement si l'adresse a changé : géocoder à
       // chaque enregistrement solliciterait Nominatim pour rien.
       if (base) {

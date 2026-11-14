@@ -29,6 +29,9 @@
 .filtre-bloc--vert .filtre-bloc__bandeau { background: var(--studio-green, #26784c); }
 .filtre-bloc__contenu { padding: 0.7rem 0.8rem 0.4rem; }
 .filtre-bloc__contenu .choix { margin-bottom: 0.4rem; }
+/* Les univers, au-dessus des styles : trois grosses pastilles, une ligne. */
+.filtre-bloc__contenu .choix--univers { flex-wrap: nowrap; }
+.filtre-bloc__contenu .choix--univers .choix__option { flex: 1 1 0; min-width: 0; justify-content: center; font-weight: 800; text-align: center; }
 
 /* Pastilles cochées : la couleur du bloc, pour qu'on voie d'un coup d'œil
    ce qui est retenu, et où. */

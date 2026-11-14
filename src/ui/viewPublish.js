@@ -5,7 +5,7 @@ import '../lib/leafletIcons.js' // correctif icônes marqueur (Vite)
 import { el, formatPrice, formatPriceCourt, formatTime, BADGE_MAX } from './components.js'
 import { blocDescription } from './ficheEvenement.js'
 import { loginPrompt } from './components.js'
-import { posterEventCard } from './posterEventCard.js'
+import { posterEventCard, ajusterCarte } from './posterEventCard.js'
 import { createPhotoFramer } from './photoFramer.js'
 import { icon } from './icons.js'
 import { studioHeader } from './studio.js'
@@ -18,9 +18,11 @@ import { rechercheCommune } from './rechercheCommune.js'
 import { rechercheAdresse } from './rechercheAdresse.js'
 import { rueDeLEvenement } from '../lib/adresse.js'
 import { chercherAdresse } from '../lib/geocodage.js'
+import { UNIVERS, categoriesDe, universDe, libelleCourt } from '../lib/univers.js'
 import { demoActif } from '../lib/demo.js'
 import { menuEditeur } from './menuEditeur.js'
-import { foodTrucksAnnonces, foodTrucksValides, synchroniserFoodTrucks } from '../lib/foodTrucks.js'
+import { foodTrucksAnnonces, synchroniserFoodTrucks } from '../lib/foodTrucks.js'
+import { choixFoodTrucks } from './choixFoodTrucks.js'
 import './planning.css'
 import { JOURS, formatJourMois, serieProposee } from '../lib/recurrence.js'
 import { toDisplayableFile } from '../lib/heic.js'
@@ -121,6 +123,7 @@ export async function viewPublish({ query } = {}) {
   // « Musique » par défaut : la catégorie la plus publiée, et un choix déjà
   // valide vaut mieux qu'un champ vide qu'on oublie de remplir.
   const fCategory = selectField('Catégorie *', CATEGORIES, init.category || 'Musique')
+  ajouterUnivers(fCategory, init.category || 'Musique')
   const fDesc = textareaField('Description', init.description)
   // ⚠ DÉBUT PRÉ-RENSEIGNÉ SUR AUJOURD'HUI. Vide, `datetime-local` laisse
   // l'année à ce que le navigateur propose : c'est ainsi qu'un événement s'est
@@ -150,7 +153,8 @@ export async function viewPublish({ query } = {}) {
   apercuDesc.appendChild(el('span', 'form__label', 'Aperçu sur la fiche'))
   const cadreApercu = el('div', 'fiche-apercu')
   apercuDesc.appendChild(cadreApercu)
-  apercuDesc.appendChild(
+  // Le conseil vit sous le champ : c'est AVANT d'écrire qu'il sert.
+  fDesc.wrap.appendChild(
     el(
       'span',
       'form__hint',
@@ -160,12 +164,10 @@ export async function viewPublish({ query } = {}) {
   function majApercuDesc() {
     cadreApercu.textContent = ''
     const bloc = blocDescription(fDesc.input.value)
-    if (!bloc) {
-      cadreApercu.appendChild(
-        el('p', 'fiche-apercu__vide', 'Votre description apparaîtra ici, telle qu’elle sera lue.')
-      )
-      return
-    }
+    // Rien d'écrit : pas d'aperçu. Le grand cadre vide occupait la moitié de
+    // l'écran pour annoncer qu'il n'y avait encore rien à voir.
+    apercuDesc.style.display = bloc ? '' : 'none'
+    if (!bloc) return
     const carte = el('section', 'fiche-carte')
     carte.appendChild(el('h3', 'fiche-carte__titre', 'À propos'))
     carte.appendChild(bloc)
@@ -591,43 +593,48 @@ export async function viewPublish({ query } = {}) {
   restoWrap.appendChild(restoCorps)
 
   let resto = Boolean(init.restauration || init.food_trucks?.length)
-  const trucksChoisis = new Set()
   let photoMenu = null // nouveau fichier
   let retirerMenu = false
 
-  // 1. Les food trucks — la liste des fiches validées, à cocher.
+  // 1. Les food trucks — cherchés par leur nom, comme une commune (14/11/2026 :
+  //    la liste complète débordait de l'écran et ne pouvait que s'allonger).
   restoCorps.appendChild(el('span', 'form__label', 'Food trucks présents'))
-  const trucksListe = el('div', 'choix resto__trucks')
-  trucksListe.appendChild(el('span', 'form__hint', 'Chargement des food trucks…'))
-  restoCorps.appendChild(trucksListe)
+  const choixTrucks = choixFoodTrucks({
+    // Lus seulement à l'ouverture du bloc, comme avant.
+    initiaux: () => (existing ? foodTrucksAnnonces(existing.id).catch(() => []) : []),
+    contexte: () => ({
+      dept: communeChoisie?.dept ?? null,
+      lat: state.lat,
+      lng: state.lng,
+      jours: joursDeLEvenement(),
+      eventId: existing?.id ?? null,
+    }),
+  })
+  restoCorps.appendChild(choixTrucks.wrap)
   restoCorps.appendChild(
-    el('p', 'form__hint', 'Seuls les food trucks inscrits et validés sur Armana apparaissent ici. Ils peuvent retirer la mention depuis leur planning.')
+    el(
+      'p',
+      'form__hint',
+      'Seuls les food trucks inscrits et validés sur Armana peuvent être annoncés. Ils peuvent retirer la mention depuis leur planning.'
+    )
   )
-  let trucksCharges = false
-  async function chargerTrucks() {
-    if (trucksCharges) return
-    trucksCharges = true
-    const [liste, deja] = await Promise.all([
-      foodTrucksValides(),
-      existing ? foodTrucksAnnonces(existing.id) : Promise.resolve([]),
-    ])
-    deja.forEach((id) => trucksChoisis.add(id))
-    trucksListe.innerHTML = ''
-    if (!liste.length) {
-      trucksListe.appendChild(el('span', 'form__hint', 'Aucun food truck n’est encore inscrit sur Armana.'))
-      return
-    }
-    for (const t of liste) {
-      const b = el('button', 'choix__option', t.name + (t.cuisine ? ` · ${t.cuisine}` : ''))
-      b.type = 'button'
-      b.classList.toggle('is-active', trucksChoisis.has(t.id))
-      b.addEventListener('click', () => {
-        if (trucksChoisis.has(t.id)) trucksChoisis.delete(t.id)
-        else if (trucksChoisis.size < 6) trucksChoisis.add(t.id)
-        b.classList.toggle('is-active', trucksChoisis.has(t.id))
-      })
-      trucksListe.appendChild(b)
-    }
+
+  /** Les jours couverts par l'événement (sept au plus), pour les propositions. */
+  function joursDeLEvenement() {
+    const debut = lireDateChamp(fStart.input)
+    if (!debut) return []
+    const fin = lireDateChamp(fEnd.input)
+    const out = []
+    const x = new Date(debut)
+    const borne = fin && fin > debut ? fin : debut
+    for (let n = 0; x <= borne && n < 7; n++, x.setDate(x.getDate() + 1)) out.push(x.toLocaleDateString('en-CA'))
+    return out
+  }
+  // Les dates changent : les camions « là ce jour-là » aussi.
+  for (const champ of [fStart.input, fEnd.input]) {
+    champ.addEventListener('change', () => {
+      if (resto) choixTrucks.suggerer()
+    })
   }
 
   // 2. Le menu, plat par plat, et/ou sa photo.
@@ -679,7 +686,11 @@ export async function viewPublish({ query } = {}) {
     restoNon.classList.toggle('is-active', !resto)
     restoOui.classList.toggle('is-active', resto)
     restoCorps.hidden = !resto
-    if (resto) chargerTrucks()
+    if (!resto) return
+    choixTrucks.charger()
+    // ⚠ Différé : au premier appel, le lieu et la commune (déclarés plus bas)
+    // n'existent pas encore — les lire tout de suite lèverait une erreur.
+    setTimeout(() => choixTrucks.suggerer(), 0)
   }
   restoNon.addEventListener('click', () => {
     resto = false
@@ -981,15 +992,15 @@ export async function viewPublish({ query } = {}) {
   const photoHint = el('p', 'form__hint')
   fPhoto.appendChild(photoHint)
   if (sharedPhoto) {
-    fPhoto.appendChild(
-      el('p', 'form__hint', `📷 Photo importée depuis le partage. Choisissez un fichier pour la remplacer.`)
-    )
+    fPhoto.appendChild(el('p', 'form__hint', '📷 Photo importée depuis le partage. « Changer » pour en prendre une autre.'))
   }
 
   /** Une entrée par jour : { file, crop }. Les trous sont permis. */
   const photos = []
   let slotActif = 0
   let slots = []
+  /** Par emplacement : redessine sa ligne (photo choisie, en ligne, ou rien). */
+  let majEtats = []
 
   // ⚠ MODIFICATION : LES PHOTOS DÉJÀ EN LIGNE SE VOIENT (retour d'une
   // utilisatrice, 11/11/2026 : « je dois remettre la photo à chaque fois »).
@@ -1047,15 +1058,32 @@ export async function viewPublish({ query } = {}) {
     return true
   }
 
-  /** Ce que porte l'emplacement i : une nouvelle photo, celle en ligne, ou rien. */
+  /**
+   * Ce que porte l'emplacement i : une nouvelle photo, celle en ligne, ou rien.
+   * ⚠ Le champ « Parcourir » du navigateur n'apparaît plus, en création non
+   * plus (14/11/2026) : tronqué en « Aucun fi…ier choisi », il disait mal ce
+   * qu'il y avait, et pas du tout ce qu'on attendait. Il reste dans la page —
+   * c'est lui qui ouvre le sélecteur —, simplement masqué.
+   */
   function etatEmplacement(i, input) {
     const enLigne = photosEnLigne.get(i)
     const nouvelle = photos[i]?.file
-    if (!enLigne && !nouvelle) return null
-    // Le champ « Parcourir » dirait « Aucun fichier choisi » alors qu'une photo
-    // est bien là : on le remplace par un état lisible. Il reste dans la page
-    // (c'est lui qui ouvre le sélecteur), simplement masqué.
     input.style.display = 'none'
+    if (!enLigne && !nouvelle) {
+      const vide = el('div', 'photo-actuelle photo-actuelle--vide')
+      const pictogramme = el('span', 'photo-actuelle__mini')
+      pictogramme.appendChild(icon('image'))
+      const texte = el('span', 'photo-actuelle__texte')
+      texte.append(
+        el('strong', null, 'Ajouter une photo'),
+        el('span', null, i > 0 ? 'Sinon, celle du premier jour.' : 'L’affiche, telle qu’on la verra dans l’agenda.')
+      )
+      const choisir = el('button', 'btn btn--primary btn--sm', 'Choisir')
+      choisir.type = 'button'
+      choisir.addEventListener('click', () => input.click())
+      vide.append(pictogramme, texte, choisir)
+      return vide
+    }
     const etat = el('div', 'photo-actuelle')
     const mini = el('img', 'photo-actuelle__mini')
     mini.alt = ''
@@ -1091,6 +1119,7 @@ export async function viewPublish({ query } = {}) {
     if (slots.length === n) return
     slotsBox.innerHTML = ''
     slots = []
+    majEtats = []
     const debut = fStart.input.value ? new Date(fStart.input.value) : null
     for (let i = 0; i < n; i++) {
       const slot = el('div', 'photo-slot')
@@ -1122,13 +1151,9 @@ export async function viewPublish({ query } = {}) {
         }
       })
       slot.appendChild(input)
-      // En modification seulement : en création, le champ « Parcourir » (qui
-      // affiche le nom du fichier choisi) reste tel que les gens le connaissent.
       let etat = null
       const majEtat = () => {
-        if (!existing) return
         const neuf = etatEmplacement(i, input)
-        if (!neuf) return
         if (etat) etat.replaceWith(neuf)
         else slot.appendChild(neuf)
         etat = neuf
@@ -1136,6 +1161,7 @@ export async function viewPublish({ query } = {}) {
       majEtat()
       slotsBox.appendChild(slot)
       slots.push(input)
+      majEtats[i] = majEtat
     }
     photoHint.textContent =
       n > 1
@@ -1241,11 +1267,13 @@ export async function viewPublish({ query } = {}) {
     setText('.poster-card__day', String(d.getDate()).padStart(2, '0'))
     setText('.poster-card__month', PREVIEW_MONTH.format(d).replace('.', '').toUpperCase())
     setText('.poster-card__time', formatTime(ev.starts_at))
-    setText('.poster-card__category', ev.category)
+    setText('.poster-card__category', libelleCourt(ev.category))
     setText('.poster-card__title', ev.title)
     // Comme sur l'Agenda : la commune seule.
     setText('.poster-card__place', ev.ville)
     setText('.poster-card__price', formatPriceCourt(ev))
+    // Un mot trop long rapetisse le titre ou le tarif, comme sur l'Agenda.
+    ajusterCarte(previewCard, { textesChanges: true })
     frameTools.style.display = framingEnabled ? '' : 'none'
     syncFrameUi()
   }
@@ -1313,6 +1341,7 @@ export async function viewPublish({ query } = {}) {
       .then(async (f) => {
         photos[0] = { file: f, crop: null }
         await chargerDansApercu(0)
+        majEtats[0]?.()
       })
       .catch((e) => {
         frameHint.textContent = 'Photo non utilisable : ' + e.message
@@ -1336,11 +1365,13 @@ export async function viewPublish({ query } = {}) {
 
   const ETAPES = [
     { titre: 'L’essentiel', champs: [fPhoto, fTitle.wrap, fCategory.wrap] },
-    { titre: 'Quand', champs: [fDesc.wrap, apercuDesc, fStart.wrap, fEnd.wrap, recurWrap] },
+    // (La description était rangée ici, dans « Quand » ; elle ouvre désormais
+    // « Détails », avec le reste de ce qu'on raconte de l'événement.)
+    { titre: 'Quand', champs: [fStart.wrap, fEnd.wrap, recurWrap] },
     // `verifier` : ce que le navigateur ne sait pas contrôler seul. Sans lui,
     // on découvrait à la DERNIÈRE étape que la commune manquait.
     { titre: 'Où', champs: [locWrap], verifier: () => (communeChoisie ? alerteCentre() : 'Choisissez la commune dans la liste.') },
-    { titre: 'Détails', champs: [paidWrap, restoWrap, fContact.wrap] },
+    { titre: 'Détails', champs: [fDesc.wrap, apercuDesc, paidWrap, restoWrap, fContact.wrap] },
   ]
   const guide = !existing
 
@@ -1416,17 +1447,18 @@ export async function viewPublish({ query } = {}) {
     })
     montrer(0)
   } else {
+    // Le même ordre que les étapes de la création.
     form.appendChild(fPhoto)
     form.appendChild(fTitle.wrap)
     form.appendChild(fCategory.wrap)
-    form.appendChild(fDesc.wrap)
-    form.appendChild(apercuDesc)
     // Dates en pleine largeur (empilées) : en 2 colonnes le champ datetime
     // était trop étroit sur mobile (« croupi »).
     form.appendChild(fStart.wrap)
     form.appendChild(fEnd.wrap)
     form.appendChild(recurWrap)
     form.appendChild(locWrap)
+    form.appendChild(fDesc.wrap)
+    form.appendChild(apercuDesc)
     form.appendChild(paidWrap)
     // ⚠ Oublié jusqu'au 11/11/2026 : en modification, la restauration sur
     // place (menu, food trucks) n'apparaissait pas — on ne pouvait la corriger
@@ -1490,7 +1522,7 @@ export async function viewPublish({ query } = {}) {
       // pré-rempli sur aujourd'hui, et le champ redevenait vide — donc à
       // nouveau exposé à l'erreur d'année qu'il servait à écarter.
       if (saved.title) fTitle.input.value = saved.title
-      if (saved.category) fCategory.input.value = saved.category
+      if (saved.category) fCategory.choisir(saved.category)
       if (saved.description) {
         fDesc.input.value = saved.description
         majApercuDesc()
@@ -1559,6 +1591,11 @@ export async function viewPublish({ query } = {}) {
     if (origine) origineRepere = origine
     saveSnapshot() // le lieu fait partie du brouillon persistant
     majAideRepere()
+    // Le lieu a bougé : les food trucks « là ce jour-là » ne sont plus les mêmes.
+    if (resto) {
+      clearTimeout(setPoint._trucks)
+      setPoint._trucks = setTimeout(() => choixTrucks.suggerer(), 600)
+    }
     if (!map) return
     if (!marker) {
       marker = L.marker([lat, lng], { draggable: true }).addTo(map)
@@ -1743,7 +1780,8 @@ export async function viewPublish({ query } = {}) {
       // est déjà enregistré, un échec ici (migration 0035 absente, réseau) ne
       // doit pas faire croire que rien n'est parti.
       try {
-        if (trucksCharges || !resto) await synchroniserFoodTrucks(row.id, resto ? [...trucksChoisis] : [])
+        // Bloc jamais ouvert : on ne sait pas ce qui était annoncé, on n'y touche pas.
+        if (choixTrucks.pret() || !resto) await synchroniserFoodTrucks(row.id, resto ? choixTrucks.valeurs() : [])
         if (resto && photoMenu) await envoyerPhotoMenu(row.id, photoMenu)
         else if ((!resto || retirerMenu) && init.menu_photo_path) {
           await retirerPhotoMenu(row.id, init.menu_photo_path)
@@ -1819,9 +1857,13 @@ function textareaField(label, value) {
 }
 
 function selectField(label, options, value) {
-  const wrap = el('label', 'form__field')
+  // ⚠ UN <div>, PLUS UN <label> : les pastilles d'univers vivent dans ce bloc,
+  // et un <label> renvoie le moindre appui sur son texte vers le PREMIER
+  // bouton qu'il contient — toucher « Catégorie » repassait en Culture.
+  const wrap = el('div', 'form__field')
   wrap.appendChild(el('span', 'form__label', label))
   const input = el('select', 'form__input')
+  input.setAttribute('aria-label', label.replace(/\s*\*$/, ''))
   // Option vide EN TÊTE : sans elle, le premier choix de la liste (« Musique »)
   // était retenu par défaut et tous les événements non renseignés atterrissaient
   // en Musique — filtres et badges faussés dès la première soirée.
@@ -1837,6 +1879,63 @@ function selectField(label, options, value) {
   if (!options.includes(value)) empty.selected = true
   wrap.appendChild(input)
   return { wrap, input }
+}
+
+/**
+ * L'UNIVERS AVANT LA CATÉGORIE (14/11/2026) : trois pastilles — Culture,
+ * Ateliers, Vie locale —, puis la liste des catégories de cet univers
+ * seulement. Celui qui publie range ainsi lui-même son événement au bon
+ * endroit de l'agenda (lib/univers.js).
+ * Ajoute `champ.choisir(categorie)`, qui règle l'univers et la catégorie.
+ */
+function ajouterUnivers(champ, valeur) {
+  const rangee = el('div', 'choix choix--univers-publier')
+  const aide = el('span', 'form__hint')
+  let univers = universDe(valeur)
+  const boutons = UNIVERS.map((u) => {
+    const b = el('button', 'choix__option', u.nom)
+    b.type = 'button'
+    b.addEventListener('click', () => {
+      if (u.cle === univers) return
+      univers = u.cle
+      remplir(null)
+      // Le reste du formulaire (aperçu, brouillon) écoute les changements.
+      champ.input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    rangee.appendChild(b)
+    return { b, cle: u.cle }
+  })
+
+  /** La liste des catégories de l'univers ; `choix` est retenu s'il en fait partie. */
+  function remplir(choix) {
+    const options = categoriesDe(univers)
+    champ.input.innerHTML = ''
+    const vide = el('option', null, '— Choisir une catégorie —')
+    vide.value = ''
+    champ.input.appendChild(vide)
+    for (const o of options) {
+      const opt = el('option', null, o)
+      opt.value = o
+      champ.input.appendChild(opt)
+    }
+    champ.input.value = options.includes(choix) ? choix : ''
+    for (const { b, cle } of boutons) b.classList.toggle('is-active', cle === univers)
+    aide.textContent =
+      univers === 'vie-locale'
+        ? 'Un marché ou une fête avec un concert ? Rangez-le en Culture, sous « Musique » : c’est le concert qu’on vient voir.'
+        : univers === 'ateliers'
+          ? 'Ce qu’on vient faire soi-même : peinture, écriture, yoga, méditation, stages… En Culture, ce qu’on vient voir ou écouter.'
+          : ''
+    aide.hidden = !aide.textContent
+  }
+
+  champ.wrap.insertBefore(rangee, champ.input)
+  champ.wrap.appendChild(aide)
+  remplir(valeur)
+  champ.choisir = (categorie) => {
+    univers = universDe(categorie)
+    remplir(categorie)
+  }
 }
 
 /** ISO → valeur d'input datetime-local (heure locale, sans secondes). */

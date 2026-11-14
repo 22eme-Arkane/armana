@@ -1,0 +1,226 @@
+/* Armana — annuaire des associations (14/11/2026), et son entrée depuis l'Agenda.
+   Préfixé `.page--associations` : battre `.page--studio-sub` (le piège de
+   spécificité du projet). */
+
+.page--associations { display: flex; flex-direction: column; gap: 0.75rem; }
+
+/* La recherche, en pilule blanche (comme l'adresse d'un événement). */
+.page--associations .asso-recherche {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  background: #fff;
+}
+.page--associations .asso-recherche svg { flex: 0 0 auto; width: 18px; height: 18px; color: #0b55c5; }
+.page--associations .asso-recherche input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  border: none;
+  background: transparent;
+  color: #062b1d;
+  font: inherit;
+  outline: none;
+}
+
+/* Où : deux pastilles, puis la carte de France — le langage de Mon territoire. */
+.page--associations .asso-ou {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.page--associations .asso-zones { display: flex; gap: 0.35rem; }
+.page--associations .asso-zone {
+  flex: 1 1 0;
+  min-height: 36px;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.page--associations .asso-zone.is-active { border-color: #fff; background: #fff; color: #0b55c5; }
+.page--associations .asso-france { margin: 0; }
+.page--associations .asso-france .carte-depts__svg { max-height: 230px; margin: 0 auto; }
+.page--associations .asso-france .carte-depts__dept {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: rgba(11, 85, 197, 0.9);
+  stroke-width: 0.025;
+  transition: fill 0.15s ease;
+}
+/* Un département qui compte au moins une association… */
+.page--associations .asso-france .carte-depts__dept.a-des-assos { fill: rgba(255, 255, 255, 0.42); }
+/* … et ceux où l'on regarde, en jaune. */
+.page--associations .asso-france .carte-depts__dept.is-active { fill: #f4ca15; }
+
+/* Le résumé : combien, où, et de quoi remonter. */
+.page--associations .asso-resume { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.page--associations .asso-resume__texte { margin: 0; color: #fff; font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; }
+.page--associations .asso-remonter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 32px;
+  padding: 0.15rem 0.7rem 0.15rem 0.4rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #f4ca15;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.page--associations .asso-remonter svg { width: 16px; height: 16px; }
+
+/* Le sommaire : une ligne par région ou par département, avec son nombre. */
+.page--associations .asso-rangs { overflow: hidden; border-radius: 18px; background: #fff4df; }
+.page--associations .asso-rang {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: none;
+  border-top: 1px solid rgba(6, 43, 29, 0.1);
+  background: transparent;
+  color: #062b1d;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.page--associations .asso-rang:first-child { border-top: none; }
+.page--associations .asso-rang > svg { flex: 0 0 auto; width: 20px; height: 20px; color: #0b55c5; }
+.page--associations .asso-rang__texte { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.05rem; }
+.page--associations .asso-rang__texte strong { font-family: var(--font-display); font-size: 1.05rem; line-height: 1.2; }
+.page--associations .asso-rang__texte span { font-size: 0.78rem; font-weight: 600; color: #26784c; }
+.page--associations .asso-plus { margin: 0; color: rgba(255, 255, 255, 0.9); font-size: 0.82rem; text-align: center; }
+
+.page--associations .asso-domaines {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0 -0.7rem;
+  padding: 0 0.7rem 0.1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.page--associations .asso-domaines::-webkit-scrollbar { display: none; }
+.page--associations .asso-domaine {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0.3rem 0.85rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.page--associations .asso-domaine.is-active { border-color: #f4ca15; background: #f4ca15; color: #062b1d; }
+/* Les départements : même rangée, mais choisis en BLANC (comme Mon territoire
+   et Toute la France) — pour ne pas se confondre avec les domaines, en jaune. */
+.page--associations .asso-depts[hidden] { display: none; }
+.page--associations .asso-depts .asso-domaine.is-active { border-color: #fff; background: #fff; color: #0b55c5; }
+
+.page--associations .asso-liste { display: flex; flex-direction: column; gap: 0.55rem; }
+.page--associations .asso-carte,
+.page--associations .asso-appel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem 0.6rem 0.6rem;
+  border: none;
+  border-radius: 18px;
+  background: #fff4df;
+  color: #062b1d;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(6, 43, 29, 0.18);
+}
+.page--associations .asso-carte > svg,
+.page--associations .asso-appel > svg:last-child { flex: 0 0 auto; width: 20px; height: 20px; color: #0b55c5; }
+.page--associations .asso-carte__photo {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #0b55c5;
+  color: #f4ca15;
+}
+.page--associations .asso-carte__photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.page--associations .asso-carte__photo svg { width: 28px; height: 28px; }
+.page--associations .asso-carte__texte { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.08rem; }
+/* Le domaine en rouge, comme la catégorie sur les cartes de l'Agenda. */
+.page--associations .asso-carte__domaine {
+  color: #f04b2f;
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.page--associations .asso-carte__nom { font-family: var(--font-display); font-size: 1.15rem; line-height: 1.15; overflow-wrap: anywhere; }
+.page--associations .asso-carte__ville { font-size: 0.78rem; font-weight: 600; color: #26784c; }
+
+/* L'appel aux associations absentes : la carte en JAUNE d'Armana, encre
+   sombre, pictogramme dans un rond bleu. (Le violet du premier essai n'était
+   « pas dans les tons d'Armana ».) */
+.page--associations .asso-appel { background: #f4ca15; color: #062b1d; }
+.page--associations .asso-appel__picto {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #0b55c5;
+  color: #f4ca15;
+}
+.page--associations .asso-appel__picto svg { width: 22px; height: 22px; }
+.page--associations .asso-appel__texte { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+/* Assez petit pour tenir sur une ligne à 360 px (le « ? » passait seul à la
+   ligne, retour de Matthieu). */
+.page--associations .asso-appel__texte strong { font-size: 0.84rem; white-space: nowrap; }
+.page--associations .asso-appel__texte span { font-size: 0.78rem; }
+
+/* --- Dans l'Agenda : un lien discret vers l'annuaire, à droite du petit rond
+   du calendrier (univers Ateliers, Vie locale). Pas de bandeau : il
+   surchargeait la page d'accueil. --- */
+.screen--studio-calendar .ligne-calendrier {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+.screen--studio-calendar .asso-lien {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 32px;
+  padding: 0.2rem 0.2rem 0.2rem 0.55rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #f4ca15;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.screen--studio-calendar .asso-lien[hidden] { display: none; }
+.screen--studio-calendar .asso-lien svg { width: 16px; height: 16px; }

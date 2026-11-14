@@ -70,6 +70,18 @@
   text-transform: uppercase;
 }
 
+/* Les univers (14/11/2026), à la place de l'ancienne rangée de styles : ses
+   pastilles à contour blanc (règles ci-dessous), mais trois seulement, qui se
+   partagent la largeur — rien à faire défiler. */
+.screen--studio-calendar .chips-row--univers { overflow: visible; }
+.screen--studio-calendar .chips-row--univers .chip {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* Styles : contour blanc, fond transparent ; choisi = jaune plein. */
 .screen--studio-calendar .chips-row--cats .chip {
   color: #fff;
@@ -85,14 +97,24 @@
 
 /* Filtres rapides : une barre unique, translucide, comme un sélecteur.
    Vérifié sur 360 px : la rangée tient sur une ligne. */
+/* ⚠ UNE SEULE LIGNE, TOUJOURS (Matthieu, 14/11/2026) : sur un petit écran, ou
+   avec « Filtres · 2 », la rangée passait à la ligne et cassait la pilule.
+   Mieux vaut qu'elle défile au doigt vers la droite. */
 .screen--studio-calendar .chips-row--studio.chips-row--rapides {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
   gap: 0.2rem;
   padding: 0.25rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
 }
+.screen--studio-calendar .chips-row--studio.chips-row--rapides::-webkit-scrollbar { display: none; }
 .screen--studio-calendar .chips-row--studio.chips-row--rapides .chip {
-  flex: 1 1 auto;
+  /* Grandit pour remplir la pilule quand il y a la place, ne rétrécit jamais :
+     le surplus défile. */
+  flex: 1 0 auto;
   justify-content: center;
   color: #fff;
   background: transparent;

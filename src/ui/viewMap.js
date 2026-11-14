@@ -19,6 +19,7 @@ import {
   getDepartementsEffectifs,
   getJourPrecis,
   getQuand,
+  getUnivers,
   joursDeQuand,
   libelleQuand,
   nbFiltresActifs,
@@ -26,6 +27,7 @@ import {
   setJourPrecis,
   setQuand,
 } from '../lib/filter.js'
+import { nomUnivers } from '../lib/univers.js'
 import { ouvrirFiltres } from './filtres.js'
 import { foodTrucksSurCarte } from '../lib/fiches.js'
 import {
@@ -93,33 +95,47 @@ const MARGE_BORD_PX = 22
 // maison (bord net du motif, sans trait).
 const FILET_PX = 0
 
-// Marqueur aux couleurs d'Armana : la goutte jaune cerclée de vert, avec les
-// masques au centre. Plus gros que le marqueur bleu de Leaflet, qu'on
-// distinguait mal du fond de carte (demande de Matthieu).
+// Marqueur aux couleurs d'Armana : une goutte cerclée, avec les masques au
+// centre. Plus gros que le marqueur bleu de Leaflet, qu'on distinguait mal du
+// fond de carte (demande de Matthieu).
 // `divIcon` plutôt qu'une image : le SVG reste net sur tous les écrans et ne
 // coûte aucun téléchargement.
-const MARQUEUR_ARMANA = L.divIcon({
-  className: 'marqueur-armana',
-  html: `
-    <svg viewBox="0 0 44 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M22 55C22 55 41 33.6 41 21A19 19 0 1 0 3 21C3 33.6 22 55 22 55Z"
-            fill="#f4ca15" stroke="#064f36" stroke-width="3.5" stroke-linejoin="round"/>
-      <image href="/icons/armana-logo.png" x="9" y="8" width="26" height="26"/>
-    </svg>`,
-  iconSize: [44, 56],
-  // La POINTE de la goutte doit toucher le lieu, pas son centre : sinon tous
-  // les événements paraissent décalés de 28 px vers le nord.
-  iconAnchor: [22, 55],
-  popupAnchor: [0, -48],
-})
+//
+// ⚠ UNE COULEUR PAR UNIVERS (Matthieu, 14/11/2026) — les trois couleurs
+// d'Armana, celles des deux masques et le bleu : JAUNE pour Culture (la goutte
+// d'origine), VERT pour Ateliers, BLEU pour Vie locale. La carte ne montre
+// qu'un univers à la fois : la couleur dit d'un coup d'œil lequel.
+// Sur le vert et le bleu, les masques sont posés sur un disque crème — le
+// masque vert, sinon, se fondait dans la goutte verte.
+const GOUTTES = {
+  culture: { fond: '#f4ca15', trait: '#064f36', disque: null },
+  ateliers: { fond: '#52a85a', trait: '#064f36', disque: '#fff4df' },
+  'vie-locale': { fond: '#0b55c5', trait: '#062e6f', disque: '#fff4df' },
+}
+const icones = new Map()
 
-/** La même goutte, avec le NOMBRE d'événements qu'elle réunit au même endroit. */
-function marqueurGroupe(n) {
-  return L.divIcon({
-    ...MARQUEUR_ARMANA.options,
-    className: 'marqueur-armana marqueur-armana--groupe',
-    html: MARQUEUR_ARMANA.options.html + `<span class="marqueur-armana__nombre">${n > 9 ? '9+' : n}</span>`,
+/** La goutte d'un univers ; avec `n`, elle porte le nombre d'événements réunis. */
+function marqueurUnivers(univers, n = 1) {
+  const cle = `${univers}|${n}`
+  if (icones.has(cle)) return icones.get(cle)
+  const g = GOUTTES[univers] ?? GOUTTES.culture
+  const icone = L.divIcon({
+    className: `marqueur-armana marqueur-armana--${univers}` + (n > 1 ? ' marqueur-armana--groupe' : ''),
+    html:
+      `<svg viewBox="0 0 44 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
+      `<path d="M22 55C22 55 41 33.6 41 21A19 19 0 1 0 3 21C3 33.6 22 55 22 55Z" ` +
+      `fill="${g.fond}" stroke="${g.trait}" stroke-width="3.5" stroke-linejoin="round"/>` +
+      (g.disque ? `<circle cx="22" cy="21" r="14.5" fill="${g.disque}"/>` : '') +
+      `<image href="/icons/armana-logo.png" x="9" y="8" width="26" height="26"/></svg>` +
+      (n > 1 ? `<span class="marqueur-armana__nombre">${n > 9 ? '9+' : n}</span>` : ''),
+    iconSize: [44, 56],
+    // La POINTE de la goutte doit toucher le lieu, pas son centre : sinon tous
+    // les événements paraissent décalés de 28 px vers le nord.
+    iconAnchor: [22, 55],
+    popupAnchor: [0, -48],
   })
+  icones.set(cle, icone)
+  return icone
 }
 
 // Marqueur de food truck : un rond rouge au camion blanc. Volontairement d'une
@@ -377,7 +393,8 @@ export async function viewMap() {
       count.textContent = t
       return
     }
-    count.textContent = `${nbEvenements} événement${nbEvenements > 1 ? 's' : ''}`
+    // L'univers regardé (14/11/2026) : rien d'autre ne le dit sur la carte.
+    count.textContent = `${nbEvenements} événement${nbEvenements > 1 ? 's' : ''} · ${nomUnivers(getUnivers())}`
   }
 
   async function loadEvents() {
@@ -428,7 +445,7 @@ export async function viewMap() {
         const [premier] = groupe
         const seul = groupe.length === 1
         const m = L.marker([premier.lat, premier.lng], {
-          icon: seul ? MARQUEUR_ARMANA : marqueurGroupe(groupe.length),
+          icon: marqueurUnivers(getUnivers(), groupe.length),
           // Un repère qui en cache plusieurs passe devant ses voisins.
           zIndexOffset: seul ? 0 : 500,
         })

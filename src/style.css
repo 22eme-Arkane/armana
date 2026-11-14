@@ -91,6 +91,14 @@ html, body {
   font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+/* ⚠ PAS DE ZOOM DE PAGE (14/11/2026, voir index.html et lib/zoom.js) :
+   - `manipulation` retire le zoom au double appui, sans gêner le défilement ;
+   - `text-size-adjust` empêche iOS de grossir le texte en mode paysage. */
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
 #app { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
 
@@ -464,6 +472,9 @@ a.settings-row .settings-row__label { word-break: break-all; }
 .photo-actuelle__texte strong { font-size: 0.9rem; }
 .photo-actuelle__texte span { font-size: 0.76rem; opacity: 0.75; }
 .photo-actuelle .btn { flex: 0 0 auto; }
+/* Pas encore de photo : le pictogramme à la place de la vignette. */
+.photo-actuelle--vide .photo-actuelle__mini { display: grid; place-items: center; color: #0b55c5; background: rgba(11, 85, 197, 0.1); }
+.photo-actuelle--vide .photo-actuelle__mini svg { width: 24px; height: 24px; }
 
 /* Répétition hebdomadaire — pastilles L M M J V S D. */
 .recur { margin-top: 0.6rem; }
@@ -2779,8 +2790,11 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
 .bottom-nav--studio .navtab.is-active .navtab__icone { transform: scale(1.1); }
 .bottom-nav--studio .navtab.is-active .navtab__label { font-weight: 800; }
 
-/* Le « + » central. ⚠ Le carré est penché, PAS le pictogramme : on le
-   redresse d'autant, sinon la croix paraîtrait de travers. */
+/* Le « + » central : le masque jaune du logo, sa pastille « + » sur le menton
+   (14/11/2026, ui/boutonMasque.js). Il remplace le carré bleu penché.
+   Taille choisie parmi quatre essais (masque 56 px, pastille 28 px), puis
+   réduite d'un cran à la demande de Matthieu : « encore un peu trop grand »
+   → masque 50 px, pastille 25 px. */
 .navtab-publier {
   flex: 0 0 64px;
   align-self: stretch;
@@ -2791,22 +2805,42 @@ html:has(.screen--studio-calendar)::-webkit-scrollbar { display: none; }
   background: none;
   cursor: pointer;
 }
-.navtab-publier__carre {
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  margin-top: -22px;
-  border-radius: 18px;
-  background: var(--studio-blue, #0b55c5);
-  color: var(--mask-yellow, #f4ca15);
-  box-shadow: 0 6px 14px rgba(6, 43, 29, 0.28);
-  transform: rotate(-8deg);
+.navtab-publier__masque {
+  position: relative;
+  display: block;
+  width: 50px;
+  height: 55px;
+  /* Il dépasse au-dessus de la barre d'environ la moitié de sa hauteur. */
+  margin-top: -27px;
+  filter: drop-shadow(0 5px 6px rgba(6, 43, 29, 0.32));
   transition: transform 0.18s ease;
 }
-.navtab-publier__carre svg { width: 27px; height: 27px; stroke-width: 2.6; transform: rotate(8deg); }
-.navtab-publier:active .navtab-publier__carre { transform: rotate(-8deg) scale(0.94); }
-.navtab-publier.is-active .navtab-publier__carre { background: #064f36; }
+.navtab-publier:active .navtab-publier__masque { transform: scale(0.92); }
+.navtab-publier.is-active .navtab-publier__masque { transform: scale(1.06); }
+/* L'image d'origine (déjà penchée à droite, comme dans le logo), cernée de
+   vert sombre — quatre ombres dures, une par côté — pour se détacher du jaune
+   de la barre : sans liseré, le bas du masque s'y fondait. */
+.navtab-publier__masque img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(1.4px 0 0 #064f36) drop-shadow(-1.4px 0 0 #064f36) drop-shadow(0 1.4px 0 #064f36) drop-shadow(0 -1.4px 0 #064f36);
+}
+.navtab-publier__pastille {
+  position: absolute;
+  right: -2px;
+  bottom: -1px;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 2.25px solid #fff;
+  border-radius: 50%;
+  background: #0b55c5;
+  color: #fff;
+}
+.navtab-publier__pastille svg { width: 14px; height: 14px; stroke-width: 3.2; }
 
 /* Carte éditoriale autonome de l’Agenda. Les dimensions sont calées sur
    l’artboard mobile de référence (390 px), sans dépendre de .ecard. */

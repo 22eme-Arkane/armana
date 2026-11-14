@@ -11,6 +11,7 @@ import { countFeedback } from '../lib/feedback.js'
 import { demoActif } from '../lib/demo.js'
 import { currentBuild } from '../lib/update.js'
 import { studioHeader, boutonPartage } from './studio.js'
+import { titreMaFiche } from './typeCompte.js'
 
 export async function viewSettings() {
   // Armana ne sert à rien sans utilisateurs : le bouton de partage est logé
@@ -65,10 +66,8 @@ export async function viewSettings() {
   // La fiche d'un lieu ou d'un food truck (migration 0033), seulement pour ces
   // types de compte : un particulier n'a pas de vitrine à tenir.
   const type = getProfile()?.account_type
-  if (logged && (type === 'lieu' || type === 'food_truck')) {
-    pub.appendChild(
-      rowNav(icon('image'), type === 'food_truck' ? 'Ma fiche de food truck' : 'Ma fiche de lieu', '/ma-fiche')
-    )
+  if (logged && ['lieu', 'food_truck', 'association'].includes(type)) {
+    pub.appendChild(rowNav(icon('image'), titreMaFiche(type), '/ma-fiche'))
     // Le planning, à portée d'un geste : c'est l'écran qu'un camion ouvre
     // chaque semaine, pas sa fiche.
     if (type === 'food_truck') pub.appendChild(rowNav(icon('calendar'), 'Mon planning', '/mon-planning'))

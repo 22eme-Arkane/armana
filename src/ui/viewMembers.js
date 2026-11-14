@@ -78,6 +78,7 @@ export async function viewMembers() {
         { cle: 'particulier', texte: 'Particuliers', n: compte((m) => typeDe(m) === 'particulier') },
         { cle: 'lieu', texte: 'Lieux', n: compte((m) => typeDe(m) === 'lieu') },
         { cle: 'food_truck', texte: 'Food trucks', n: compte((m) => typeDe(m) === 'food_truck') },
+        { cle: 'association', texte: 'Associations', n: compte((m) => typeDe(m) === 'association') },
         { cle: 'moderateurs', texte: 'Modérateurs', n: compte((m) => m.role === 'admin' || m.is_owner) },
       ],
       {

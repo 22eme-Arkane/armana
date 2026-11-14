@@ -84,6 +84,8 @@ export function viewAuth() {
     particulier: 'Pour suivre l’agenda, garder vos favoris et publier des événements.',
     lieu: 'Vous gérez une salle, un café-concert, une galerie… Vous pourrez créer la fiche de votre lieu : photo, horaires, site.',
     food_truck: 'Vous pourrez créer la fiche de votre camion : cuisine, menu, photo — puis indiquer où vous trouver.',
+    association:
+      'Un club, une asso de yoga, un comité des fêtes… Vous pourrez créer la fiche de votre association : activités, horaires, contact.',
   }
   function peindreType() {
     TYPES_COMPTE.forEach((t, i) => typeBtns[i].classList.toggle('is-active', t.cle === typeCompte))
