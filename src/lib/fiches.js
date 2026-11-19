@@ -9,6 +9,9 @@ import { getUser } from './auth.js'
 import { toWebp } from './image.js'
 import { ecrirePoint, lirePoint } from './point.js'
 import { demoActif, demoAssociations, demoFiche, demoGestion } from './demo.js'
+import { chargerCommunes, communeLaPlusProche, villeDeLEvenement } from './communes.js'
+import { regionsDe } from './departements.js'
+import { villeDeLAdresse } from './adresse.js'
 
 const BUCKET = 'event-photos'
 // Calculée ici plutôt qu'importée d'events.js : events.js importe ce module
@@ -94,45 +97,154 @@ async function lireFiche(filtre) {
   return enrichir(r.data)
 }
 
+// Les petits mots qui suivent « Association » quand il fait partie du nom :
+// « Association des parents d'élèves » ne devient pas « des parents d'élèves ».
+const MOTS_LIES = new Set(['de', 'des', 'du', 'd', 'pour', 'les', 'la', 'le', 'l', 'au', 'aux', 'et', 'en', 'sur'])
+
 /**
- * L'INDEX de l'annuaire des associations : toutes celles qui sont publiées,
- * mais seulement leur nom, leur département et leur domaine — de quoi compter
- * par région et par département, et chercher par nom, sans rien télécharger
- * de lourd. Le détail (photo, adresse) ne se charge que pour ce qui s'affiche :
- * voir `associationsParIds`.
- * Ne lève jamais : sans la migration 0041, aucune association n'existe.
- * @returns {Promise<Array<{id:string, name:string, dept:string|null, domaine:string|null}>>}
+ * Le nom d'une association SANS « Association » devant (Matthieu,
+ * 19/11/2026) : dans l'annuaire, la répétition (« Association Chrysalis »,
+ * « Association Perséphonic »…) noyait les noms. Le nom enregistré ne change
+ * pas ; seul l'affichage l'allège.
+ */
+export function nomAssociation(nom) {
+  const brut = String(nom || '').trim()
+  const m = brut.match(/^(?:l['’]\s*)?(?:association|assoc\.?|asso\.?)\s+(.+)$/i)
+  if (!m) return brut
+  const reste = m[1].trim()
+  const premier = reste.split(/[\s'’]/)[0].toLowerCase()
+  if (reste.length < 2 || MOTS_LIES.has(premier)) return brut
+  return reste.charAt(0).toUpperCase() + reste.slice(1)
+}
+
+/**
+ * Les comptes « association » qui n'ont PAS de fiche publiée (19/11/2026).
+ * Matthieu veut les voir dans l'annuaire, même sans fiche ni événement : un
+ * compte passé en association, ou une association qui vient de s'inscrire
+ * (« Solidarité interculturelle 04 »), y paraît aussitôt, sous son nom.
+ * On le situe d'après son DERNIER ÉVÉNEMENT publié ; sans événement, son
+ * département reste inconnu (`dept` null) et l'annuaire le range à part.
+ * Ne lève jamais.
+ */
+async function comptesAssociationsSansFiche(proprietaires) {
+  const { data: comptes, error } = await supabase
+    .from('profiles')
+    .select('id, display_name')
+    .eq('account_type', 'association')
+    .limit(2000)
+  if (error || !comptes?.length) return []
+  const sans = comptes.filter((p) => !proprietaires.has(p.id) && String(p.display_name || '').trim().length >= 2)
+  if (!sans.length) return []
+  const { data: evs } = await supabase
+    .from('events_geo')
+    .select('created_by, dept, city, address, lat, lng, starts_at')
+    .eq('status', 'approved')
+    .in('created_by', sans.map((p) => p.id))
+    .order('starts_at', { ascending: false })
+    .limit(2000)
+  const dernier = new Map()
+  for (const e of evs ?? []) if (!dernier.has(e.created_by)) dernier.set(e.created_by, e)
+  return sans.map((p) => {
+    const e = dernier.get(p.id) ?? null
+    return {
+      id: 'compte:' + p.id,
+      compte: p.id,
+      name: p.display_name.trim(),
+      dept: e?.dept ?? null,
+      domaine: null,
+      evenement: e,
+    }
+  })
+}
+
+/**
+ * L'INDEX de l'annuaire des associations : les fiches publiées, PLUS les
+ * comptes « association » sans fiche (voir ci-dessus) — seulement leur nom,
+ * leur département et leur domaine, de quoi compter, filtrer et chercher sans
+ * rien télécharger de lourd. Le détail (photo, commune) ne se charge que pour
+ * ce qui s'affiche : voir `detailsAssociations`.
+ * Rangé par nom affiché (sans « Association » devant). Ne lève jamais.
+ * @returns {Promise<Array<{id:string, name:string, dept:string|null, domaine:string|null, compte?:string}>>}
  */
 export async function indexAssociations() {
   if (demoActif()) return demoAssociations().map(({ id, name, dept, domaine }) => ({ id, name, dept, domaine }))
   const lire = () =>
     supabase
       .from('fiches')
-      .select('id, name, dept' + (avecDomaine ? ', domaine' : ''))
+      .select('id, owner_id, name, dept' + (avecDomaine ? ', domaine' : ''))
       .eq('kind', 'association')
       .eq('status', 'approved')
-      .order('name')
       .limit(5000)
   let r = await lire()
   while (sansColonneManquante(r.error)) r = await lire()
-  return r.error ? [] : r.data
+  const fiches = r.error ? [] : r.data
+  const comptes = await comptesAssociationsSansFiche(new Set(fiches.map((f) => f.owner_id))).catch(() => [])
+  return [...fiches, ...comptes].sort((a, b) => nomAssociation(a.name).localeCompare(nomAssociation(b.name), 'fr'))
 }
 
-/** Le détail des associations demandées, dans l'ordre donné. */
-export async function associationsParIds(ids) {
-  if (!ids.length) return []
-  let liste
+/**
+ * La commune à afficher sous le nom : celle de l'adresse ; à défaut, la plus
+ * proche du point de la fiche ; pour un compte sans fiche, celle de son
+ * dernier événement. (Les fiches créées par la migration 0042 n'ont pas
+ * d'adresse : leurs événements n'avaient pas de code postal.)
+ */
+function communeAffichee(a, communes) {
+  if (a.compte) return a.evenement ? villeDeLEvenement(a.evenement, communes) : null
+  if (a.address) return villeDeLAdresse(a.address)
+  return communes ? (communeLaPlusProche(communes, a.lat, a.lng)?.nom ?? null) : null
+}
+
+/**
+ * Le détail des associations de l'index qui s'affichent, dans l'ordre donné :
+ * la fiche complète pour les fiches, l'entrée de l'index pour les comptes sans
+ * fiche. Chacune reçoit `ville`.
+ */
+export async function detailsAssociations(entrees) {
+  if (!entrees.length) return []
+  let fiches
   if (demoActif()) {
-    liste = demoAssociations()
+    fiches = demoAssociations()
   } else {
+    const ids = entrees.filter((e) => !e.compte).map((e) => e.id)
     const lire = () => supabase.from('fiches').select(colonnes()).in('id', ids)
-    let r = await lire()
+    let r = ids.length ? await lire() : { data: [] }
     while (sansColonneManquante(r.error)) r = await lire()
-    if (r.error) return []
-    liste = r.data.map(enrichir)
+    fiches = r.error ? [] : r.data.map(enrichir)
   }
-  const parId = new Map(liste.map((a) => [a.id, a]))
-  return ids.map((id) => parId.get(id)).filter(Boolean)
+  const parId = new Map(fiches.map((a) => [a.id, a]))
+  const liste = entrees.map((e) => (e.compte ? e : parId.get(e.id))).filter(Boolean)
+  const communes = await chargerCommunes(regionsDe(liste.map((a) => a.dept))).catch(() => null)
+  return liste.map((a) => ({ ...a, ville: communeAffichee(a, communes) }))
+}
+
+/**
+ * La fiche d'un COMPTE association, pour l'annuaire : sa fiche publiée s'il en
+ * a une, sinon une fiche réduite à son nom (et à la commune de son dernier
+ * événement) — la page montre alors ses prochains rendez-vous, et dit que
+ * l'association n'a pas encore présenté son activité. Null si ce n'est pas un
+ * compte association.
+ */
+export async function ficheDuCompte(uid) {
+  const existante = await lireFiche((q) => q.eq('owner_id', uid)).catch(() => null)
+  if (existante) return existante
+  const { data: p } = await supabase
+    .from('profiles')
+    .select('id, display_name, account_type')
+    .eq('id', uid)
+    .maybeSingle()
+  if (!p || p.account_type !== 'association') return null
+  const [entree] = await comptesAssociationsSansFiche(new Set()).then((l) => l.filter((c) => c.compte === uid))
+  const [detail] = entree ? await detailsAssociations([entree]) : [null]
+  return {
+    id: null,
+    owner_id: uid,
+    kind: 'association',
+    name: p.display_name,
+    status: 'approved',
+    sansFiche: true,
+    ville: detail?.ville ?? null,
+    gallery_urls: [],
+  }
 }
 
 /** La fiche de la personne connectée, ou null. */

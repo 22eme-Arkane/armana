@@ -6,14 +6,19 @@
 // migration 0041), et cet annuaire les rassemble.
 //
 // ⚠ JAMAIS DE LISTE INFINIE (Matthieu, 14/11/2026, comme pour les food
-// trucks). L'annuaire se parcourt du large au précis :
-//   · toute la France  → les RÉGIONS, avec leur nombre d'associations ;
-//   · une région, ou Mon territoire → les associations elles-mêmes, avec les
-//     DÉPARTEMENTS en pastilles pour filtrer (une liste de départements à
-//     traverser d'abord était, elle aussi, trop longue) ; 30 au plus à l'écran.
-// La CARTE de France, comme dans Mon territoire, montre où l'on regarde et
-// permet de toucher un département directement. Une recherche par nom et les
-// domaines (Sport, Bien-être…) affinent à tout moment.
+// trucks) : 30 associations au plus à l'écran, puis on invite à préciser. Les
+// DÉPARTEMENTS de la zone, en pastilles, filtrent (une liste de départements à
+// traverser d'abord était trop longue).
+// ⚠ PAS DE NOMS DE RÉGIONS À L'ÉCRAN (Matthieu, 19/11/2026) : la CARTE de
+// France montre déjà où l'on regarde, et l'on y touche un département. Le
+// sommaire des régions (« Toute la France ») et le résumé qui énumérait tout
+// le territoire (« 2 associations · Auvergne-Rhône-Alpes, Bourgogne… ») ont
+// été retirés : on voit directement les associations.
+//
+// ⚠ TOUTES LES ASSOCIATIONS, MÊME SANS FICHE NI ÉVÉNEMENT (19/11/2026) : un
+// compte « association » paraît sous son nom dès son inscription. Celles dont
+// on ne connaît pas encore le lieu sont rangées à part, en bas.
+// Les noms s'affichent sans « Association » devant (`nomAssociation`).
 //
 // Seul un INDEX léger (nom, département, domaine) est chargé d'un coup : le
 // détail — photo, commune — ne l'est que pour la poignée d'associations
@@ -24,14 +29,11 @@ import { studioHeader } from './studio.js'
 import { carteDepartements } from './carteDepts.js'
 import { navigate } from '../lib/router.js'
 import { isLoggedIn } from '../lib/auth.js'
-import { DOMAINES, associationsParIds, indexAssociations } from '../lib/fiches.js'
+import { DOMAINES, detailsAssociations, indexAssociations, nomAssociation } from '../lib/fiches.js'
 import { getMesDepartements } from '../lib/mesDepartements.js'
-import { CODES_DEPARTEMENTS, deptsDeRegion, nomDepartement, nomRegion, regionDuDept, resumeTerritoire } from '../lib/departements.js'
-import { villeDeLAdresse } from '../lib/adresse.js'
+import { CODES_DEPARTEMENTS, deptsDeRegion, nomDepartement, nomRegion, regionDuDept } from '../lib/departements.js'
 import './associations.css'
 
-/** En deçà, on montre directement les associations plutôt qu'un sommaire. */
-const SEUIL_LISTE = 8
 /** Au-delà, la liste est coupée : on invite à préciser. */
 const MAX_LISTE = 30
 
@@ -66,11 +68,13 @@ export async function viewAssociations({ query } = {}) {
     if (zone.type === 'region') return deptsDeRegion(zone.code)
     return getMesDepartements()
   }
+  // Un SEUL nom, et seulement quand on a touché un département ou une région :
+  // « Mon territoire » et « Toute la France » se lisent déjà sur les boutons
+  // et sur la carte.
   const nomZone = () => {
-    if (dept) return `${dept} ${nomDepartement(dept)}`
-    if (zone.type === 'france') return 'toute la France'
+    if (dept) return nomDepartement(dept)
     if (zone.type === 'region') return nomRegion(zone.code)
-    return resumeTerritoire(getMesDepartements()) || 'mon territoire'
+    return ''
   }
   const aller = (z, d = null) => {
     zone = z
@@ -182,6 +186,11 @@ export async function viewAssociations({ query } = {}) {
 
     const dansLaZone = pool.filter((a) => dansZone.has(a.dept))
     const trouvees = dept ? dansLaZone.filter((a) => a.dept === dept) : dansLaZone
+    // Celles dont on ne connaît pas encore le lieu (ni fiche, ni événement) :
+    // visibles tant qu'on n'a pas touché un département ou une région, et
+    // rangées à part, en bas.
+    const sansLieu = dept || zone.type === 'region' ? [] : pool.filter((a) => !a.dept)
+    const total = trouvees.length + sansLieu.length
 
     // Le résumé, et le chemin pour remonter d'une région à toute la France.
     resume.innerHTML = ''
@@ -192,7 +201,8 @@ export async function viewAssociations({ query } = {}) {
       remonter.addEventListener('click', () => aller({ type: 'france' }))
       resume.appendChild(remonter)
     }
-    resume.appendChild(el('p', 'asso-resume__texte', `${pluriel(trouvees.length)} · ${nomZone()}`))
+    const ou = nomZone()
+    resume.appendChild(el('p', 'asso-resume__texte', pluriel(total) + (ou ? ` · ${ou}` : '')))
 
     // Les pastilles des départements de la zone qui ont des associations —
     // pas pour toute la France, où l'on passe d'abord par la région.
@@ -214,7 +224,7 @@ export async function viewAssociations({ query } = {}) {
     }
 
     liste.innerHTML = ''
-    if (!trouvees.length) {
+    if (!total) {
       liste.appendChild(
         emptyState(
           q
@@ -227,37 +237,25 @@ export async function viewAssociations({ query } = {}) {
       return
     }
 
-    // Toute la France : le sommaire des RÉGIONS (treize au plus), tant que la
-    // liste serait longue — sauf si l'on cherche un nom.
-    if (!q && !dept && zone.type === 'france' && trouvees.length > SEUIL_LISTE) {
-      const parRegion = new Map()
-      for (const a of trouvees) {
-        const r = regionDuDept(a.dept)
-        parRegion.set(r, (parRegion.get(r) ?? 0) + 1)
-      }
-      const rangs = el('div', 'asso-rangs')
-      for (const [code, n] of [...parRegion].sort((x, y) => nomRegion(x[0]).localeCompare(nomRegion(y[0]), 'fr'))) {
-        const r = el('button', 'asso-rang')
-        r.type = 'button'
-        const texte = el('span', 'asso-rang__texte')
-        texte.append(el('strong', null, nomRegion(code)), el('span', null, pluriel(n)))
-        r.append(texte, icon('chevronRight'))
-        r.addEventListener('click', () => aller({ type: 'region', code }))
-        rangs.appendChild(r)
-      }
-      liste.appendChild(rangs)
-      return
-    }
-
     // Les associations elles-mêmes : le détail ne se charge que pour elles.
     const montrees = trouvees.slice(0, MAX_LISTE)
-    const details = await associationsParIds(montrees.map((a) => a.id)).catch(() => [])
+    const aPart = sansLieu.slice(0, MAX_LISTE)
+    const details = await detailsAssociations([...montrees, ...aPart]).catch(() => [])
     if (moi !== tour) return // une autre demande est passée entre-temps
-    for (const a of details) liste.appendChild(carteAsso(a))
+    const parId = new Map(details.map((a) => [a.id, a]))
+    const poser = (a) => {
+      const d = parId.get(a.id)
+      if (d) liste.appendChild(carteAsso(d))
+    }
+    montrees.forEach(poser)
     if (trouvees.length > MAX_LISTE) {
       liste.appendChild(
-        el('p', 'asso-plus', `Et ${trouvees.length - MAX_LISTE} autres : choisissez un département, ou cherchez un nom.`)
+        el('p', 'asso-plus', `Et ${trouvees.length - MAX_LISTE} autres : touchez un département sur la carte, ou cherchez un nom.`)
       )
+    }
+    if (aPart.length) {
+      liste.appendChild(el('p', 'asso-sous-titre', 'Lieu pas encore indiqué'))
+      aPart.forEach(poser)
     }
   }
 
@@ -281,10 +279,11 @@ function carteAsso(a) {
   }
   const texte = el('span', 'asso-carte__texte')
   texte.appendChild(el('span', 'asso-carte__domaine', a.domaine || 'Association'))
-  texte.appendChild(el('strong', 'asso-carte__nom', a.name))
-  const ville = a.address ? villeDeLAdresse(a.address) : null
-  if (ville) texte.appendChild(el('span', 'asso-carte__ville', ville))
+  // Le nom sans « Association » devant : la ligne rouge au-dessus le dit déjà.
+  texte.appendChild(el('strong', 'asso-carte__nom', nomAssociation(a.name)))
+  if (a.ville) texte.appendChild(el('span', 'asso-carte__ville', a.ville))
   b.append(vignette, texte, icon('chevronRight'))
-  b.addEventListener('click', () => navigate('/fiche?id=' + a.id))
+  // Un compte sans fiche ouvre sa fiche réduite (son nom, ses rendez-vous).
+  b.addEventListener('click', () => navigate(a.compte ? '/fiche?compte=' + a.compte : '/fiche?id=' + a.id))
   return b
 }

@@ -8,10 +8,12 @@ import { icon } from './icons.js'
 import { studioHeader } from './studio.js'
 import { posterEventCard } from './posterEventCard.js'
 import { blocDescription } from './ficheEvenement.js'
-import { getFiche } from '../lib/fiches.js'
+import { ficheDuCompte, getFiche, nomAssociation } from '../lib/fiches.js'
 import { listEventsByAuthor } from '../lib/events.js'
 import { lireContact } from '../lib/contact.js'
 import { villeDeLAdresse } from '../lib/adresse.js'
+import { chargerCommunes, communeLaPlusProche } from '../lib/communes.js'
+import { regionsDe } from '../lib/departements.js'
 import { getUser, isLoggedIn } from '../lib/auth.js'
 import { navigate } from '../lib/router.js'
 import {
@@ -34,7 +36,14 @@ const ICONE_CONTACT = { web: 'globe', tel: 'phone', mail: 'mail' }
 export async function viewFiche({ query } = {}) {
   const wrap = el('section', 'page page--studio-sub page--studio-blue fiche')
   const id = query?.get('id')
-  const f = id ? await getFiche(id).catch(() => null) : null
+  // `compte` : une association de l'annuaire qui n'a pas (encore) de fiche
+  // publiée — on montre alors sa fiche réduite (lib/fiches.js, ficheDuCompte).
+  const compte = query?.get('compte')
+  const f = id
+    ? await getFiche(id).catch(() => null)
+    : compte
+      ? await ficheDuCompte(compte).catch(() => null)
+      : null
   // Le titre dit ce qu'on regarde : « Food truck » pour un camion (Matthieu,
   // 15/10/2026), « À découvrir » pour un lieu.
   wrap.appendChild(
@@ -65,8 +74,16 @@ export async function viewFiche({ query } = {}) {
   if (f.kind !== 'food_truck') {
     haut.appendChild(el('span', 'fiche-categorie', estAsso ? f.domaine || 'Association' : LIBELLE[f.kind]))
   }
-  haut.appendChild(el('h2', 'fiche-titre', f.name))
-  const sous = f.kind === 'food_truck' ? f.cuisine : f.address ? villeDeLAdresse(f.address) : null
+  // Une association sans « Association » devant son nom : le titre de page le dit.
+  haut.appendChild(el('h2', 'fiche-titre', estAsso ? nomAssociation(f.name) : f.name))
+  // Sans adresse (fiches créées par la migration 0042), la commune la plus
+  // proche du point de la fiche.
+  let ville = f.ville ?? null
+  if (!ville && !f.address && Number.isFinite(f.lat) && f.dept) {
+    const communes = await chargerCommunes(regionsDe([f.dept])).catch(() => null)
+    ville = communes ? (communeLaPlusProche(communes, f.lat, f.lng)?.nom ?? null) : null
+  }
+  const sous = f.kind === 'food_truck' ? f.cuisine : f.address ? villeDeLAdresse(f.address) : ville
   if (sous) haut.appendChild(el('p', 'fiche-entete__sous', sous))
   entete.appendChild(haut)
   wrap.appendChild(entete)
@@ -101,6 +118,29 @@ export async function viewFiche({ query } = {}) {
   if (estTruck && f.status === 'approved') ajouterCarte(wrap, 'Aujourd’hui', blocAujourdhui(presences, f))
 
   // --- Cartes --------------------------------------------------------------------
+  // Une association qui n'a encore rien écrit : on le DIT, plutôt qu'une page
+  // où ne paraissent que ses rendez-vous (Matthieu croyait la fiche absente).
+  const moi = Boolean(f.owner_id) && f.owner_id === getUser()?.id
+  const vide = estAsso && !f.description && !f.photo_url && !f.opening_hours && !f.website && !f.contact
+  if (vide) {
+    const box = el('div', 'fiche-vide')
+    box.appendChild(
+      el(
+        'p',
+        'fiche-texte__p fiche-texte__p--centre',
+        moi
+          ? 'Votre fiche est encore vide : ajoutez une photo, une présentation et vos activités.'
+          : 'Cette association n’a pas encore présenté son activité sur Armana.'
+      )
+    )
+    if (moi) {
+      const b = el('button', 'btn btn--primary btn--sm', 'Compléter ma fiche')
+      b.type = 'button'
+      b.addEventListener('click', () => navigate('/ma-fiche'))
+      box.appendChild(b)
+    }
+    ajouterCarte(wrap, 'À propos', box)
+  }
   ajouterCarte(wrap, 'À propos', blocDescription(f.description))
   // Le menu, plat par plat, et sa photo (ardoise, carte) DANS la même carte.
   if (estTruck) ajouterCarte(wrap, 'Au menu', blocMenu(f.menu, f.product_photo_url, f.name))
@@ -127,6 +167,9 @@ export async function viewFiche({ query } = {}) {
     const liste = el('div', 'events-list fiche-evenements')
     evs.forEach((ev, i) => liste.appendChild(posterEventCard(ev, { index: i })))
     wrap.appendChild(liste)
+  } else if (estAsso) {
+    wrap.appendChild(el('h3', 'fiche-section-bleue', 'Ses prochains rendez-vous'))
+    wrap.appendChild(el('p', 'fiche-aucun-rdv', 'Aucun rendez-vous annoncé pour l’instant.'))
   }
 
   return wrap

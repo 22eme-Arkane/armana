@@ -25,6 +25,21 @@ import {
   retirerPhotoProduit,
   supprimerMaFiche,
 } from '../lib/fiches.js'
+import { demoActif } from '../lib/demo.js'
+
+/** La fiche de démonstration : nom et commune seuls, comme après la 0042. */
+function ficheDemoAssociation() {
+  return {
+    id: 'demo-asso-fiche',
+    owner_id: 'demo-asso',
+    kind: 'association',
+    name: 'Association Chrysalis',
+    address: 'Mane',
+    status: 'approved',
+    gallery_paths: [],
+    gallery_urls: [],
+  }
+}
 
 const ETATS = {
   pending: {
@@ -38,16 +53,21 @@ const ETATS = {
   },
 }
 
-export async function viewFicheEdit() {
+export async function viewFicheEdit({ query } = {}) {
   const wrap = el('section', 'page page--studio-sub page--fiche-edit')
   wrap.appendChild(studioHeader('Ma fiche', { backTo: '/parametres' }))
 
-  if (!isLoggedIn()) {
+  // DÉMONSTRATION (`?demo=1#/ma-fiche?asso=1`, local et préversions) : l'écran
+  // tel que le voit une association dont la fiche vient d'être créée par la
+  // migration 0042 — son nom seul. Matthieu n'avait jamais vu cet écran.
+  const demo = demoActif() && query?.get('asso') === '1'
+
+  if (!isLoggedIn() && !demo) {
     wrap.appendChild(loginPrompt('Connectez-vous pour créer la fiche de votre lieu ou de votre food truck.'))
     return wrap
   }
 
-  let fiche = await getMaFiche()
+  let fiche = demo ? ficheDemoAssociation() : await getMaFiche()
   // Le type vient de la fiche si elle existe, sinon du profil — ou, juste après
   // l'inscription, des métadonnées (le profil n'est pas encore à jour).
   const typeProfil = getProfile()?.account_type
@@ -288,6 +308,12 @@ export async function viewFicheEdit() {
       msg.textContent = 'Choisissez le domaine de votre association.'
       return
     }
+    // Démonstration : rien ne part en base.
+    if (demo) {
+      msg.className = 'form__msg'
+      msg.textContent = 'Démonstration : rien n’est enregistré.'
+      return
+    }
     submit.disabled = true
     msg.className = 'form__msg'
     msg.textContent = 'Enregistrement…'
@@ -385,7 +411,7 @@ export async function viewFicheEdit() {
   // --- Supprimer la fiche -----------------------------------------------------
   const supprimer = el('button', 'btn btn--danger btn--block fiche-supprimer', 'Supprimer ma fiche')
   supprimer.type = 'button'
-  supprimer.hidden = !fiche
+  supprimer.hidden = !fiche || demo
   supprimer.addEventListener('click', async () => {
     if (!confirm('Supprimer définitivement votre fiche et ses photos ?')) return
     supprimer.disabled = true

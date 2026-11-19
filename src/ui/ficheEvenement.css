@@ -340,6 +340,9 @@ body:has(.fiche) { background: #0b55c5; }
 .fiche-menu__plat { flex: 1 1 auto; font-weight: 600; line-height: 1.4; }
 .fiche-menu__prix { flex: 0 0 auto; color: var(--studio-green); font-weight: 800; white-space: nowrap; }
 .fiche-produit img { display: block; width: 100%; border-radius: 14px; }
+/* Association sans rendez-vous, ou à la fiche encore vide (19/11/2026). */
+.fiche-aucun-rdv { margin: 0; color: #fff; font-size: 0.9rem; text-align: center; }
+.fiche-vide { display: flex; flex-direction: column; align-items: center; gap: 0.7rem; }
 .fiche-section-bleue {
   margin: 1.4rem 0 0.7rem;
   color: #fff;

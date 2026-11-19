@@ -81,27 +81,15 @@
 }
 .page--associations .asso-remonter svg { width: 16px; height: 16px; }
 
-/* Le sommaire : une ligne par région ou par département, avec son nombre. */
-.page--associations .asso-rangs { overflow: hidden; border-radius: 18px; background: #fff4df; }
-.page--associations .asso-rang {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.7rem 0.85rem;
-  border: none;
-  border-top: 1px solid rgba(6, 43, 29, 0.1);
-  background: transparent;
-  color: #062b1d;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+/* (Le sommaire des régions a été retiré le 19/11/2026 : la carte suffit.) */
+/* Les associations dont le lieu n'est pas encore connu, à part, en bas. */
+.page--associations .asso-sous-titre {
+  margin: 0.5rem 0 0;
+  color: #f4ca15;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
 }
-.page--associations .asso-rang:first-child { border-top: none; }
-.page--associations .asso-rang > svg { flex: 0 0 auto; width: 20px; height: 20px; color: #0b55c5; }
-.page--associations .asso-rang__texte { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.05rem; }
-.page--associations .asso-rang__texte strong { font-family: var(--font-display); font-size: 1.05rem; line-height: 1.2; }
-.page--associations .asso-rang__texte span { font-size: 0.78rem; font-weight: 600; color: #26784c; }
 .page--associations .asso-plus { margin: 0; color: rgba(255, 255, 255, 0.9); font-size: 0.82rem; text-align: center; }
 
 .page--associations .asso-domaines {
