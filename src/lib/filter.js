@@ -70,6 +70,26 @@ export function setUnivers(cle) {
   notifier()
 }
 
+/**
+ * L'univers de la CARTE, distinct de celui de l'Agenda (Matthieu,
+ * 19/11/2026) : la carte montre TOUT par défaut (`null`), chaque repère à la
+ * couleur de son univers — jaune, vert, bleu. On peut ensuite n'en garder
+ * qu'un ; le choisir de nouveau, ou « Tous », les remontre tous.
+ */
+let universCarte = null
+
+export function getUniversCarte() {
+  return universCarte
+}
+
+export function setUniversCarte(cle) {
+  const prochain = cle == null || cle === universCarte ? null : UNIVERS.some((u) => u.cle === cle) ? cle : null
+  if (prochain === universCarte) return
+  universCarte = prochain
+  styles = new Set()
+  notifier()
+}
+
 // --- Styles ------------------------------------------------------------------
 
 export function getStyles() {
@@ -255,6 +275,8 @@ export function nbFiltresActifs() {
 }
 
 export function resetFiltres() {
+  // « Tout afficher » : la carte remontre aussi tous les univers.
+  universCarte = null
   styles = new Set()
   tarifs = new Set()
   quand = null
@@ -274,9 +296,12 @@ export function resetFiltres() {
  *
  * @param {object[]} events
  * @param {(ev:object)=>string} tarifDe  lecture du tarif (composant d'UI)
+ * @param {{carte?: boolean}} [opts]  `carte` : l'univers de la Carte (tous
+ *        par défaut) au lieu de celui de l'Agenda
  */
-export function appliquerFiltres(events, tarifDe) {
-  let out = events.filter((e) => universDe(e.category) === univers)
+export function appliquerFiltres(events, tarifDe, { carte = false } = {}) {
+  const u = carte ? universCarte : univers
+  let out = u ? events.filter((e) => universDe(e.category) === u) : [...events]
   if (styles.size) out = out.filter((e) => styles.has(e.category))
   // Les cases cochées s'ADDITIONNENT, comme partout dans le panneau :
   // « Gratuit » + « Au chapeau » montre les deux.

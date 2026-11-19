@@ -27,10 +27,12 @@ import {
   getStyles,
   getTarifs,
   getUnivers,
+  getUniversCarte,
   nbFiltresActifs,
   resetFiltres,
   setQuand,
   setUnivers,
+  setUniversCarte,
 } from '../lib/filter.js'
 
 const TARIFS = [
@@ -49,8 +51,9 @@ const QUAND = [
 /**
  * Ouvre le panneau. Se referme au fond, à la croix, ou sur Échap.
  * @param {() => void} onChange  rappelé à chaque modification
+ * @param {{carte?: boolean}} [opts]  `carte` : ouvert depuis la Carte
  */
-export function ouvrirFiltres(onChange) {
+export function ouvrirFiltres(onChange, { carte: depuisCarte = false } = {}) {
   const fond = el('div', 'feuille-fond')
   const feuille = el('div', 'feuille')
   fond.appendChild(feuille)
@@ -230,21 +233,32 @@ export function ouvrirFiltres(onChange) {
   // --- Univers et styles (14/11/2026) -------------------------------------------
   // L'univers d'abord — c'est aussi d'ici qu'on le change depuis la Carte —,
   // puis les styles de CET univers seulement.
+  // Depuis la CARTE (19/11/2026), l'univers est le sien, et « Tous » en tête :
+  // elle montre tout par défaut, chaque univers dans sa couleur.
+  const lireUnivers = depuisCarte ? getUniversCarte : getUnivers
   const blocStyles = bloc('Univers et styles', icon('ticket'), 'jaune', null)
   pastilles(
     blocStyles,
-    UNIVERS.map((u) => ({ cle: u.cle, texte: u.nom })),
-    (u) => getUnivers() === u,
-    (u) => setUnivers(u)
+    [...(depuisCarte ? [{ cle: null, texte: 'Tous' }] : []), ...UNIVERS.map((u) => ({ cle: u.cle, texte: u.nom }))],
+    (u) => lireUnivers() === u,
+    (u) => (depuisCarte ? setUniversCarte(u) : setUnivers(u))
   ).classList.add('choix--univers')
-  blocStyles.appendChild(el('p', 'feuille__aide', 'Plusieurs styles possibles. Aucun coché = tous les styles.'))
+  const aideStyles = el('p', 'feuille__aide')
+  blocStyles.appendChild(aideStyles)
   const rangeeStyles = el('div')
   blocStyles.appendChild(rangeeStyles)
-  let universStyles = null
+  let universStyles // indéfini au départ : le premier passage peint toujours
   peintres.push(() => {
-    if (getUnivers() === universStyles) return
-    universStyles = getUnivers()
+    if (lireUnivers() === universStyles) return
+    universStyles = lireUnivers()
     rangeeStyles.innerHTML = ''
+    peintreStyles = null
+    // « Tous » sur la carte : une soixantaine de styles d'un coup serait
+    // illisible — on choisit d'abord un univers.
+    aideStyles.textContent = universStyles
+      ? 'Plusieurs styles possibles. Aucun coché = tous les styles.'
+      : 'Choisissez un univers pour filtrer par style.'
+    if (!universStyles) return
     // Les pastilles se reconstruisent : on retire leur ancien peintre.
     const avant = peintres.length
     pastilles(

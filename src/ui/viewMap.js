@@ -19,7 +19,7 @@ import {
   getDepartementsEffectifs,
   getJourPrecis,
   getQuand,
-  getUnivers,
+  getUniversCarte,
   joursDeQuand,
   libelleQuand,
   nbFiltresActifs,
@@ -27,7 +27,16 @@ import {
   setJourPrecis,
   setQuand,
 } from '../lib/filter.js'
-import { nomUnivers } from '../lib/univers.js'
+import { nomUnivers, universDe } from '../lib/univers.js'
+
+/** L'univers le plus représenté d'un groupe d'événements au même endroit. */
+function universDuGroupe(groupe) {
+  const n = new Map()
+  for (const e of groupe) n.set(universDe(e.category), (n.get(universDe(e.category)) ?? 0) + 1)
+  let meilleur = 'culture'
+  for (const [u, k] of n) if (k > (n.get(meilleur) ?? 0)) meilleur = u
+  return meilleur
+}
 import { ouvrirFiltres } from './filtres.js'
 import { foodTrucksSurCarte } from '../lib/fiches.js'
 import {
@@ -102,9 +111,9 @@ const FILET_PX = 0
 // coûte aucun téléchargement.
 //
 // ⚠ UNE COULEUR PAR UNIVERS (Matthieu, 14/11/2026) — les trois couleurs
-// d'Armana, celles des deux masques et le bleu : JAUNE pour Culture (la goutte
-// d'origine), VERT pour Ateliers, BLEU pour Vie locale. La carte ne montre
-// qu'un univers à la fois : la couleur dit d'un coup d'œil lequel.
+// d'origine), VERT pour Ateliers, BLEU pour Vie locale. Depuis le 19/11/2026,
+// la carte montre TOUS les univers par défaut (Matthieu) : la couleur de
+// chaque goutte dit le sien, et l'on n'en garde un que par les Filtres.
 // Sur le vert et le bleu, les masques sont posés sur un disque crème — le
 // masque vert, sinon, se fondait dans la goutte verte.
 const GOUTTES = {
@@ -187,7 +196,7 @@ export async function viewMap() {
 
   // 1. Filtres — le panneau de l'Agenda, avec le nombre de filtres actifs : un
   //    filtre qui ne se voit pas est un filtre qu'on oublie.
-  const pFiltres = pastilleBouton('sliders', 'Filtres', () => ouvrirFiltres(() => {}))
+  const pFiltres = pastilleBouton('sliders', 'Filtres', () => ouvrirFiltres(() => {}, { carte: true }))
   pFiltres.setAttribute('aria-haspopup', 'dialog')
   const majFiltres = () => {
     // La date a sa propre pastille juste à côté : la compter ici aussi la
@@ -360,6 +369,9 @@ export async function viewMap() {
   barre.appendChild(pTrucks)
   mapFrame.appendChild(barre)
   mapFrame.appendChild(resultsBar)
+  // ⚠ PAS DE LÉGENDE DES COULEURS : essayée le 19/11/2026, Matthieu l'a
+  // retirée — « ça surcharge la carte, on comprendra en cliquant dessus ».
+  // L'univers se choisit dans le panneau Filtres.
   mapFrame.appendChild(geoMsg)
   wrap.appendChild(mapFrame)
 
@@ -393,8 +405,9 @@ export async function viewMap() {
       count.textContent = t
       return
     }
-    // L'univers regardé (14/11/2026) : rien d'autre ne le dit sur la carte.
-    count.textContent = `${nbEvenements} événement${nbEvenements > 1 ? 's' : ''} · ${nomUnivers(getUnivers())}`
+    // L'univers retenu, s'il y en a un ; sinon les couleurs suffisent.
+    const u = getUniversCarte()
+    count.textContent = `${nbEvenements} événement${nbEvenements > 1 ? 's' : ''}` + (u ? ` · ${nomUnivers(u)}` : '')
   }
 
   async function loadEvents() {
@@ -406,7 +419,8 @@ export async function viewMap() {
       // départements affichés sont filtrés en base (`events.dept`).
       let events = await listApprovedEvents(mesCodes())
       // Styles et tarif : la même fonction que l'Agenda.
-      events = appliquerFiltres(events, tarifMode)
+      // L'univers est celui de la CARTE : tous par défaut (19/11/2026).
+      events = appliquerFiltres(events, tarifMode, { carte: true })
       // « Aujourd'hui » / « Ce week-end » du panneau, puis la date précise.
       // ⚠ Par jours COUVERTS, pas par date de début : un festival commencé
       // hier a bien lieu aujourd'hui (voir src/lib/recurrence.js).
@@ -445,7 +459,9 @@ export async function viewMap() {
         const [premier] = groupe
         const seul = groupe.length === 1
         const m = L.marker([premier.lat, premier.lng], {
-          icon: marqueurUnivers(getUnivers(), groupe.length),
+          // La couleur de SON univers ; un repère qui en réunit plusieurs
+          // prend celle du plus nombreux (Culture à égalité).
+          icon: marqueurUnivers(universDuGroupe(groupe), groupe.length),
           // Un repère qui en cache plusieurs passe devant ses voisins.
           zIndexOffset: seul ? 0 : 500,
         })
