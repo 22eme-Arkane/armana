@@ -29,6 +29,51 @@ import {
 } from '../lib/filter.js'
 import { nomUnivers, universDe } from '../lib/univers.js'
 
+/**
+ * Les événements regroupés PAR LIEU, un repère par groupe.
+ *
+ * ⚠ PAS PAR ARRONDI DES COORDONNÉES (19/11/2026). L'arrondi à quatre
+ * décimales coupait un même lieu en plusieurs repères : les cinq concerts de
+ * La Capsule (Manosque), posés à 2 à 20 m les uns des autres, tombaient de
+ * part et d'autre d'une frontière d'arrondi. On réunit désormais ce qui est à
+ * moins de 50 m — et, jusqu'à 300 m, ce qui porte le même nom de lieu (« La
+ * Capsule MJC », pointée à l'entrée par l'un, au parking par l'autre).
+ * @returns {Map<number, object[]>}
+ */
+const PROCHE_M = 50
+const MEME_NOM_M = 300
+const nomDeLieu = (ev) =>
+  String(ev.place_name || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+function metres(a, b) {
+  const dy = (b.lat - a.lat) * 111_320
+  const dx = (b.lng - a.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180)
+  return Math.hypot(dx, dy)
+}
+function regrouperParLieu(events) {
+  const groupes = []
+  for (const ev of events) {
+    if (ev.lat == null || ev.lng == null) continue
+    const p = { lat: Number(ev.lat), lng: Number(ev.lng) }
+    const nom = nomDeLieu(ev)
+    const g = groupes.find((x) => {
+      const d = metres(x.point, p)
+      return d <= PROCHE_M || (nom && x.noms.has(nom) && d <= MEME_NOM_M)
+    })
+    if (g) {
+      g.evs.push(ev)
+      if (nom) g.noms.add(nom)
+    } else {
+      groupes.push({ point: p, noms: new Set(nom ? [nom] : []), evs: [ev] })
+    }
+  }
+  return new Map(groupes.map((g, i) => [i, g.evs]))
+}
+
 /** L'univers le plus représenté d'un groupe d'événements au même endroit. */
 function universDuGroupe(groupe) {
   const n = new Map()
@@ -437,14 +482,7 @@ export async function viewMap() {
       // La Ciotat). Mesuré ce jour-là : 19 événements à venir sur 43
       // partageaient leur point avec un autre. Le repère porte désormais leur
       // nombre, et sa bulle les liste tous.
-      const parEndroit = new Map()
-      for (const ev of events) {
-        if (ev.lat == null || ev.lng == null) continue
-        // Quatre décimales : une dizaine de mètres, le même bâtiment.
-        const cle = `${Number(ev.lat).toFixed(4)},${Number(ev.lng).toFixed(4)}`
-        if (!parEndroit.has(cle)) parEndroit.set(cle, [])
-        parEndroit.get(cle).push(ev)
-      }
+      const parEndroit = regrouperParLieu(events)
       // La carte se décale pour montrer la bulle EN ENTIER, sous la rangée de
       // filtres (60 px) et au-dessus du compteur.
       const bulle = {
@@ -650,7 +688,14 @@ export async function viewMap() {
       tete.classList.add('bulle__affiche--vide')
       tete.appendChild(el('span', 'bulle__masques', '🎭'))
     }
-    if (ev.category) tete.appendChild(el('span', 'bulle__cat', ev.category))
+    // L'UNIVERS à côté du style, même pastille (Matthieu, 19/11/2026) : c'est
+    // en ouvrant la bulle qu'on comprend la couleur de la goutte — d'où sa
+    // couleur à elle, jaune, verte ou bleue.
+    const pastilles = el('span', 'bulle__pastilles')
+    const u = universDe(ev.category)
+    pastilles.appendChild(el('span', `bulle__cat bulle__cat--${u}`, nomUnivers(u)))
+    if (ev.category) pastilles.appendChild(el('span', 'bulle__cat', ev.category))
+    tete.appendChild(pastilles)
     tete.addEventListener('click', ouvrir)
     box.appendChild(tete)
 

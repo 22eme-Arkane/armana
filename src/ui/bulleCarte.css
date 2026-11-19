@@ -41,10 +41,20 @@
   background: linear-gradient(135deg, #533377 0%, #0b55c5 100%);
 }
 .bulle__masques { font-size: 2.6rem; }
-.bulle__cat {
+/* L'univers et le style, côte à côte, en bas de l'affiche (19/11/2026). */
+.bulle__pastilles {
   position: absolute;
   left: 10px;
+  right: 10px;
   bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+/* L'univers, à la couleur de sa goutte. */
+.bulle__cat.bulle__cat--ateliers { background: #52a85a; color: #fff; }
+.bulle__cat.bulle__cat--vie-locale { background: #0b55c5; color: #fff; }
+.bulle__cat {
   padding: 0.18rem 0.6rem;
   border-radius: 999px;
   background: var(--mask-yellow, #f4ca15);
